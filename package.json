@@ -1,0 +1,19 @@
+{
+  "name": "fyp",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "deploy": "npx hardhat ignition deploy ./ignition/modules/Lock.ts --reset --network localhost",
+    "test": "npx hardhat test",
+    "compile": "npx hardhat compile"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "description": "",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox-viem": "^3.0.0",
+    "hardhat": "^2.24.3"
+  }
+}
