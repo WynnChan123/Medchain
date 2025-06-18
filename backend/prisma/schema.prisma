@@ -6,10 +6,141 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            String       @id @default(uuid())
+  name          String
+  email         String       @unique
+  password      String
+  createdAt     DateTime     @default(now())
+  publicKey     String
+  role          UserRole     @default(Patient)
+  organization  Organization @relation("OrganizationUsers",fields: [organizationId], references: [id])
+  organizationId String      
+
+  PatientRecord PatientRecord[]
+  AccessPermissionGranted AccessPermission[] @relation("grantedTo")
+  AccessPermissionGrantedBy AccessPermission[] @relation("grantedBy")
+
+  @@index([email]) // Index for faster lookups by email
+  @@index([publicKey]) // Index for faster lookups by public key
+  @@index([organizationId]) // Index for faster lookups by organization
+  ConsentRequestPatient ConsentRequest[] @relation("ConsentRequestPatient")
+  ConsentRequestRequestedBy ConsentRequest[] @relation("ConsentRequestRequestedBy")
+  AuditLog AuditLog[]
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  Type      String
+  createdAt DateTime @default(now())
+  address   String   // Blockchain address of the organization
+  users     User[]   @relation("OrganizationUsers")
+}
+
+model PatientRecord {
+  id          String   @id @default(uuid())
+  patientId   String  
+  patient     User     @relation(fields: [patientId], references: [id])
+  hash       String   // hash of file for integrity
+  ipfs_cid   String   // pointer to IPFS-stored record
+  createdAt   DateTime @default(now())
+
+  AccessPermission AccessPermission[]
+
+  ConsentRequest ConsentRequest[]
+
+  AuditLog AuditLog[]
+}
+
+model AccessPermission{
+  id          String         @id @default(uuid())
+  recordId    String
+  record      PatientRecord  @relation(fields: [recordId], references: [id])
+  grantedToId String
+  grantedTo   User           @relation("grantedTo", fields: [grantedToId], references: [id])
+  grantedById String
+  grantedBy   User           @relation("grantedBy", fields: [grantedById], references: [id])
+  accessType  String
+  expiration  DateTime
+  status      String
+
+  @@unique([recordId, grantedToId]) // Ensure unique permission per record and user
+
+}
+
+model ConsentRequest {
+  id          String   @id @default(uuid())
+  patientId   String
+  purpose      String
+  patient     User     @relation("ConsentRequestPatient", fields: [patientId], references: [id])
+  recordId    String
+  record      PatientRecord @relation(fields: [recordId], references: [id])
+  requestedById String
+  requestedBy User     @relation("ConsentRequestRequestedBy", fields: [requestedById], references: [id])
+  createdAt   DateTime @default(now())
+
+  status      RequestStatus @default(PENDING)
+  requestedAt DateTime @default(now())
+  resolvedAt  DateTime?
+
+  AuditLog AuditLog[]
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  recordId    String
+  userId      String
+  accessTime  DateTime @default(now())
+  requestId   String
+
+  record      PatientRecord @relation(fields: [recordId], references: [id])
+  accessedBy  User          @relation(fields: [userId], references: [id])
+  request     ConsentRequest? @relation(fields: [requestId], references: [id])
+  action      Action
+
+
+  @@index([userId]) // Index for faster lookups by user
+}
+
+model SmartContract{
+  id          String   @id @default(uuid())
+  name        String   
+  version     String
+  address     String
+  outcome     String
+  deployedAt   DateTime @default(now())
+  // Additional fields can be added as needed
+}
+
+enum UserRole{
+  Patient
+  HealthcareProvider
+  Insurer
+  Admin
+}
+
+enum OrganizationType {
+  Hospital
+  Insurer
+  Laboratory
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  DENIED
+}
+
+enum Action{
+  VIEWED
+  DOWNLOADED
 }
