@@ -21,13 +21,19 @@ export const signUp = async (req, res) => {
     }
 
     // Find organization by name
-    const organization = await prisma.organization.findFirst({
+    let organization = await prisma.organization.findFirst({
       where: { name: organizationName }
     });
 
+    // If organization doesn't exist, create it
     if (!organization) {
-      return res.status(400).json({
-        message: "Organization not found. Please check the organization name."
+      console.log(`Creating new organization: ${organizationName}`);
+      organization = await prisma.organization.create({
+        data: {
+          name: organizationName,
+          Type: 'Hospital', // Default type
+          address: '0x0000000000000000000000000000000000000000' // Default address
+        }
       });
     }
 
@@ -49,18 +55,23 @@ export const signUp = async (req, res) => {
       organization: organization.name
     });
   } catch (error) {
+    console.error('Sign up error:', error);
     return res.status(500).json({ message: "Error creating user", error: error.message });
   }
 }
 
 export const logIn = async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, publicKey } = req.body;
 
   try {
+    if (!email || !password || !publicKey || !ethers.utils.isAddress(publicKey)) {
+      return res.status(400).json({ message: 'Email, password, and publicKey are required' });
+    }
+
     const user = await prisma.user.findUnique({
       where: { email },
       include: {
-        organization: true // Include organization details
+        organization: true
       }
     });
     if (!user) {
@@ -70,6 +81,10 @@ export const logIn = async (req, res) => {
     const isPassWordValid = await bcrypt.compare(password, user.password);
     if (!isPassWordValid) {
       return res.status(401).json({ accessToken: null, message: "Invalid Password" });
+    }
+
+    if (user.publicKey.toLowerCase() != publicKey.toLowerCase()) {
+      return res.status(401).json({ accessToken: null, message: "Invalid public key" });
     }
 
     const token = jwt.sign({
@@ -87,7 +102,8 @@ export const logIn = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        organization: user.organization.name
+        organization: user.organization.name,
+        publicKey: user.publicKey
       }
     });
 

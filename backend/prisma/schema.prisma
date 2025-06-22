@@ -121,7 +121,7 @@ model SmartContract{
   // Additional fields can be added as needed
 }
 
-enum UserRole{
+enum UserRole {
   Patient
   HealthcareProvider
   Insurer
