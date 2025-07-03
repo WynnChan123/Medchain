@@ -8,6 +8,7 @@ import React, { useState } from 'react';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import Select from 'react-select';
+import { print } from '../../../utils/toast';
 
 export default function CreateUser(){
   const [username, setUsername] = useState('');
@@ -94,13 +95,7 @@ export default function CreateUser(){
         throw new Error(data.message || 'Signed up failed')
       }
 
-      toast.success('Signed Up Successfully!', {
-          position: 'top-center',
-          autoClose: 1000,
-          onClose:() => {
-            router.push('/');
-          }
-      })
+      print('Signed Up Successfully!', 'success', () => router.push('/'));
 
     }catch(error){
       console.error('Sign up error:', error);
