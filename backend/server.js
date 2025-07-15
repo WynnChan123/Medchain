@@ -29,8 +29,8 @@ app.get('/', (req, res) => {
 
 // Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/test', userRoutes);
-app.use('/api/organizations', organizationRoutes);
+app.use('/api/user', userRoutes);
+app.use('/api/organization', organizationRoutes);
 
 // Set port, listen for requests
 const PORT = process.env.PORT || 8080;

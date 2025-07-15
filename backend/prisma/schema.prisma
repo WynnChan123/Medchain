@@ -20,21 +20,29 @@ model User {
   email         String       @unique
   password      String
   createdAt     DateTime     @default(now())
-  publicKey     String
   role          UserRole     @default(Patient)
   organization  Organization @relation("OrganizationUsers",fields: [organizationId], references: [id])
   organizationId String      
 
+  publicKeys  PublicKey[]
   PatientRecord PatientRecord[]
   AccessPermissionGranted AccessPermission[] @relation("grantedTo")
   AccessPermissionGrantedBy AccessPermission[] @relation("grantedBy")
 
   @@index([email]) // Index for faster lookups by email
-  @@index([publicKey]) // Index for faster lookups by public key
   @@index([organizationId]) // Index for faster lookups by organization
   ConsentRequestPatient ConsentRequest[] @relation("ConsentRequestPatient")
   ConsentRequestRequestedBy ConsentRequest[] @relation("ConsentRequestRequestedBy")
   AuditLog AuditLog[]
+}
+
+model PublicKey{
+  id      String    @id @default(uuid())
+  userId  String
+  publicKey String   @unique
+
+  user  User  @relation(fields: [userId], references: [id])
+  @@index([userId])
 }
 
 model Organization {
@@ -42,7 +50,7 @@ model Organization {
   name      String
   Type      String
   createdAt DateTime @default(now())
-  address   String   // Blockchain address of the organization
+  address   String   @unique
   users     User[]   @relation("OrganizationUsers")
 }
 

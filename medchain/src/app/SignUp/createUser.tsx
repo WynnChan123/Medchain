@@ -203,7 +203,7 @@ export default function CreateUser(){
             color="secondary"
             onChange={handleRoleChange}
             value={role}
-          />      
+          />
           <Button type="submit" disabled={!email || !username || !password || !role || !organizationName || !!emailError}>
             Create Account
           </Button>
