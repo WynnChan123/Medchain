@@ -156,7 +156,7 @@ export default function Login() {
           <Button type="submit" disabled={!publicKey || !username || !password || !!emailError}>
             Login to your Account
           </Button>
-          {errorMessage && <p className="text-red-400 text-center mt-2">{errorMessage}</p>}
+          {errorMessage && <p className={`${errorMessage == "Login Successful"} ?? text-red-400 text-center mt-2: `}>{errorMessage}</p>}
         </form>
         <div className="mt-6 text-center">
           <p className="text-white">or Sign in with</p>
