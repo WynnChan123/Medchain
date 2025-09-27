@@ -18,9 +18,9 @@ contract UserManagement is Med2ChainStructs {
     event RoleDefined(address indexed walletAddress, userRole role, uint timestamp);
     event RoleUpdated(address indexed walletAddress, userRole role, address updatedBy, uint timestamp);
 
-    constructor(bytes32 _hashedId) {
+    constructor() {
         admin = msg.sender;
-        hashedDeployerId = _hashedId;
+        hashedDeployerId = keccak256(abi.encodePacked(msg.sender, block.timestamp));
 
         // Register the deployer as admin
         users[msg.sender] = User({

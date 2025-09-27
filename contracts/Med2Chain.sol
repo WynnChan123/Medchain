@@ -55,6 +55,7 @@ abstract contract Med2ChainStructs {
         string updateReason;
     }
 
+}
     interface IUserManagement {
         function getUserRole(address user) external view returns (Med2ChainStructs.userRole);
         function users(address user) external view returns (Med2ChainStructs.User memory);
@@ -67,4 +68,3 @@ abstract contract Med2ChainStructs {
     interface IAccessControl {
         function accessControl(address patient, address requester, string memory recordId) external view returns (bool);
     }
-}

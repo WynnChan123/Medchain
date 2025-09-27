@@ -99,4 +99,9 @@ contract MedicalRecordsManagement is Med2ChainStructs {
 
         return updateHistory[patientAddress][medicalRecordID];
     }
+
+    function getMedicalRecord(address patient, string memory recordId) external view returns (MedicalRecord memory) {
+      require(bytes(patientMedicalRecord[patient][recordId].medicalRecordID).length > 0, "Record does not exist");
+      return patientMedicalRecord[patient][recordId];
+    }
 }

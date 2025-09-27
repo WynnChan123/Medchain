@@ -18,8 +18,8 @@ contract PatientProfileManagement is Med2ChainStructs {
     }
     
     modifier onlyPatient() {
-        require(UserManagement(userManagementContract).getUserRole(msg.sender) == userRole.Patient, "Only patients can update their profile");
-        require(UserManagement(userManagementContract).users(msg.sender).isActive == true, "Only active patients can update their profile");
+        require(IUserManagement(userManagementContract).getUserRole(msg.sender) == userRole.Patient, "Only patients can update their profile");
+        require(IUserManagement(userManagementContract).users(msg.sender).isActive == true, "Only active patients can update their profile");
         _;
     }
 
