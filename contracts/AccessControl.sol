@@ -29,7 +29,7 @@ contract AccessControlManagement is Med2ChainStructs {
     function grantAccess(address walletAddress, string memory medicalRecordID) external {
         //criteria for granting access to users: only patients can grant access and medical record needs to exist
         require(IUserManagement(userManagementContract).getUserRole(msg.sender) == userRole.Patient, "Only patients are allowed to grant access to third parties");
-        require(bytes(IMedicalRecords(medicalRecordsContract).patientMedicalRecord(msg.sender, medicalRecordID).medicalRecordID).length > 0, "Patient record does not exist");
+        require(IMedicalRecords(medicalRecordsContract).recordExists(msg.sender, medicalRecordID), "Patient record does not exist");
         require(!accessControl[msg.sender][walletAddress][medicalRecordID], "Access already granted");
         require(IUserManagement(userManagementContract).users(walletAddress).isActive, "Target user is not active");
 
@@ -41,7 +41,7 @@ contract AccessControlManagement is Med2ChainStructs {
 
     function revokeAccess(address walletAddress, string memory medicalRecordID) external {
         require(IUserManagement(userManagementContract).getUserRole(msg.sender) == userRole.Patient, "Only patients are allowed to revoke access from third parties");
-        require(bytes(IMedicalRecords(medicalRecordsContract).patientMedicalRecord(msg.sender, medicalRecordID).medicalRecordID).length > 0, "Patient record does not exist");
+        require(IMedicalRecords(medicalRecordsContract).recordExists(msg.sender, medicalRecordID), "Patient record does not exist");
 
         accessControl[msg.sender][walletAddress][medicalRecordID] = false;
 

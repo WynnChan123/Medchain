@@ -98,7 +98,6 @@ contract UserManagement is Med2ChainStructs {
         require(users[msg.sender].role == userRole.Admin, "Only admins are allowed to update roles");
         require(users[user].walletAddress != address(0), "User not registered");
 
-        userRole oldRole = users[user].role;
         users[user].role = newRole;
 
         emit RoleUpdated(user, newRole, msg.sender, block.timestamp);

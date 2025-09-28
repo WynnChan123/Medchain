@@ -22,6 +22,7 @@ contract MedicalRecordsManagement is Med2ChainStructs {
     }
 
     function addMedicalRecord(
+        address patientAddress,
         string memory medicalRecordID,
         string memory patientName,
         string memory dateOfBirth,
@@ -32,11 +33,13 @@ contract MedicalRecordsManagement is Med2ChainStructs {
         string memory recordType,
         string memory ipfsHash
     ) external {
-        require(IUserManagement(userManagementContract).getUserRole(msg.sender) == userRole.Patient, "Only patients can add records");
+        require(IUserManagement(userManagementContract).getUserRole(msg.sender) == userRole.HealthcareProvider, "Only doctors can add records");
+        require(IUserManagement(userManagementContract).getUserRole(patientAddress) == userRole.Patient, "Target must be a patient");
         require(bytes(medicalRecordID).length > 0, "Medical record ID required");
-        require(bytes(patientMedicalRecord[msg.sender][medicalRecordID].medicalRecordID).length == 0, "Record already exists");
+        require(bytes(patientMedicalRecord[patientAddress][medicalRecordID].medicalRecordID).length == 0, "Record already exists");
 
-        patientMedicalRecord[msg.sender][medicalRecordID] = MedicalRecord({
+        patientMedicalRecord[patientAddress][medicalRecordID] = MedicalRecord({
+            patientAddress: patientAddress,
             medicalRecordID: medicalRecordID,
             patientName: patientName,
             dateOfBirth: dateOfBirth,
@@ -48,7 +51,7 @@ contract MedicalRecordsManagement is Med2ChainStructs {
             ipfsHash: ipfsHash
         });
 
-        recordCount[msg.sender]++;
+        recordCount[patientAddress]++;
     }
 
     function updateRecord(
@@ -103,5 +106,9 @@ contract MedicalRecordsManagement is Med2ChainStructs {
     function getMedicalRecord(address patient, string memory recordId) external view returns (MedicalRecord memory) {
       require(bytes(patientMedicalRecord[patient][recordId].medicalRecordID).length > 0, "Record does not exist");
       return patientMedicalRecord[patient][recordId];
+    }
+
+    function recordExists(address patient, string memory recordId) external view returns (bool) {
+        return bytes(patientMedicalRecord[patient][recordId].medicalRecordID).length > 0;
     }
 }
