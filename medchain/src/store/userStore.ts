@@ -1,19 +1,18 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-
-type UserRole = 'Patient' | 'HealthcareProvider' | 'Insurer' | 'Admin';
+import { UserRole } from '../../utils/userRole';
 
 interface UserState {
-  role: UserRole;
-  setRole: (role: UserRole) => void;
+  role: keyof typeof UserRole | null;
+  setRole: (role: keyof typeof UserRole) => void;
   hasHydrated: boolean;
 }
 
 const useStore = create<UserState>()(
   persist(
     (set) => ({
-      role: 'Patient',
-      setRole: (role: UserRole) => set({ role }),
+      role: "Patient",
+      setRole: (role: keyof typeof UserRole) => set({ role }),
       hasHydrated: false,
     }),
     {

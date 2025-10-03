@@ -85,8 +85,8 @@ export default function CreateUser(){
           name: username,
           email,
           password,
-          organizationName,
-          role,
+          // organizationName,
+          // role,
         }),
       });
 
@@ -152,7 +152,7 @@ export default function CreateUser(){
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          <div>
+          {/* <div>
             <Select
               options={orgOptions}
               value={orgOptions.find(option => option.value === organizationName) || null}
@@ -197,13 +197,13 @@ export default function CreateUser(){
                 }),
               }}
             />
-          </div>
-          <Dropdown 
+          </div> */}
+          {/* <Dropdown 
             className="flex w-1/3 rounded-full h-8 bg-gray-700 border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-400"
             color="secondary"
             onChange={handleRoleChange}
             value={role}
-          />
+          /> */}
           <Button type="submit" disabled={!email || !username || !password || !role || !organizationName || !!emailError}>
             Create Account
           </Button>

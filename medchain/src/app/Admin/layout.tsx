@@ -8,25 +8,29 @@ const AdminLayout = ({children}: {children: React.ReactNode}) => {
     const [token, setToken] = useState('');
     const [userName, setUserName] = useState('');
     
-    useEffect(()=> {
-      const storedToken = localStorage.getItem(token);
-      setToken(token);
+    useEffect(() => {
+      const storedToken = localStorage.getItem('token') || '';
+      setToken(storedToken);
 
-      if(token){
-        fetch('http://localhost:3000/user/profile',{
+      if (storedToken) {
+        fetch('http://localhost:8080/api/user/profile', {
           method: 'GET',
           headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${storedToken}`,
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${storedToken}`,
           },
         })
-        .then((res)=> res.json())
-        .catch((err)=> {
-          console.log(err);
-        })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data && data.name) {
+              setUserName(data.name);
+            }
+          })
+          .catch((err) => {
+            console.log(err);
+          });
       }
-
-    }), [token];
+    }, []);
   return (
     <div className="flex min-h-screen bg-gray-800">
       <AdminSideBar />

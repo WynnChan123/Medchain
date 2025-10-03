@@ -2,9 +2,14 @@
 
 import InputField from '@/components/InputField';
 import Button from '@/components/Button';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Connect from '@/components/Connect';
 import useStore from "@/store/userStore";
+import { getRole } from '@/lib/integration';
+// import { User, UserSquare } from 'lucide-react';
+import { UserRole } from '../../utils/userRole';
+import { ethers } from 'ethers';
+import { User } from '@reown/appkit';
 
 export default function Login() {
   const [username, setUsername] = useState<string>('');
@@ -14,7 +19,11 @@ export default function Login() {
   const [emailError, setEmailError] = useState<string>('');
   const setRole = useStore((state) => state.setRole);
   const [name, setName] = useState<string>("");
+  // const [role, setRole] = useState<string>("");
 
+    useEffect(() => {
+      console.log("Public Key: ", publicKey);
+    },[publicKey]);
   // Email validation function
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -64,12 +73,24 @@ export default function Login() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: username, password, publicKey }),
       });
+        const data = await response.json();
+
+    if (!window.ethereum) {
+      setErrorMessage('Ethereum provider not found. Please install MetaMask.');
+      return;
+    }
+    const provider = new ethers.providers.Web3Provider(window.ethereum as ethers.providers.ExternalProvider);
+    await provider.send("eth_requestAccounts", []);
+    const signer = provider.getSigner();
+    const address = await signer.getAddress();
+    const network = await provider.getNetwork();
+    console.log("Connected to network:", network.chainId);
+
         if(!response.ok){
-          const text = await response.text();
-          throw new Error(text);
+          setErrorMessage(data.error || 'Login failed');
+          return;
         }
       
-      const data = await response.json();
       if (data.token) {
         setErrorMessage('Login successful');
         localStorage.setItem('token', data.token);
@@ -82,24 +103,28 @@ export default function Login() {
           },
         });
         const user = await profileRes.json();
-        if (user.role) {
-          console.log('User role: ',user.role);
-          setRole(user.role);
-          setName(user.name || "");
-          if (user.role === 'Admin') {
+        setName(user.name || "");
+
+          const roleId = await getRole(publicKey);
+          // alert(`On chain role:  ${roleId}`);
+          const roleName = UserRole[roleId] as keyof typeof UserRole;
+          alert(`Role from enum: ${roleName}`);
+          setRole(roleName);
+
+          if (roleId === UserRole.Admin) {
             window.location.href = '/Admin';
-          } else if(user.role === 'Patient'){
+          } else if(roleId === UserRole.Patient){
             window.location.href = '/Patient';
-          }else if(user.role = 'Insurer'){
+          }else if(roleId === UserRole.Insurer){
             window.location.href = '/Insurer'
-          }else if(user.role = 'HealthcareProvider'){
+          }else if(roleId === UserRole.HealthcareProvider){
             window.location.href = '/HealthcareProvider'
           }else{
             throw new Error("Not a valid user role");
           }
-        }
       } else {
         setErrorMessage('Login failed: ' + (data.error || 'Unknown error'));
+        console.log('Login failed: ', data);
       }
     } catch (error) {
       setErrorMessage('Error during login');

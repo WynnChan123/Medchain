@@ -14,7 +14,7 @@ import {
 import { useState } from 'react';
 import { Tooltip } from 'react-tooltip';
 import 'react-tooltip/dist/react-tooltip.css';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 
 
 export const menuItems = [
@@ -39,6 +39,7 @@ export const menuItems = [
 const AdminSideBar = () => {
   const [collapsed, setCollapsed] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
 
   return (
     <div
@@ -70,7 +71,7 @@ const AdminSideBar = () => {
             data-tooltip-id={`tooltip-${index}`}
             data-tooltip-content={collapsed ? item.label : ''}
             className={`flex items-center gap-4 text-white hover:font-bold hover:bg-blue-200 p-2 rounded-md transition ${
-              router.pathname === item.href ? `bg-blue-200` : ''
+              pathname === item.href ? `bg-blue-200` : ''
             }`}
           >
             {item.icon}

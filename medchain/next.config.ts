@@ -1,7 +1,21 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-};
+  webpack: (config) => {
+    config.externals.push('pino-pretty', 'lokijs', 'encoding');
+    
+    // Fix MetaMask SDK React Native dependency warnings
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      '@react-native-async-storage/async-storage': false,
+    };
+    
+    // Ignore these warnings
+    config.ignoreWarnings = [
+      { module: /node_modules\/@metamask\/sdk/ },
+    ];
+    
+    return config;
+  },};
 
 export default nextConfig;
