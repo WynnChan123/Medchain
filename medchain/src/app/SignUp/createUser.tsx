@@ -61,7 +61,7 @@ export default function CreateUser(){
     setErrorMessage('');
     
     // Check if all fields are filled
-    if(!username || !email || !password || !organizationName || !role){
+    if(!username || !email || !password){
       setErrorMessage('Please fill in all the fields!');
       return;
     }
@@ -204,7 +204,7 @@ export default function CreateUser(){
             onChange={handleRoleChange}
             value={role}
           /> */}
-          <Button type="submit" disabled={!email || !username || !password || !role || !organizationName || !!emailError}>
+          <Button type="submit" disabled={!email || !username || !password || !!emailError}>
             Create Account
           </Button>
           {errorMessage && <p className="text-red-400 text-center mt-2">{errorMessage}</p>}

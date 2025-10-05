@@ -10,7 +10,7 @@ const Button: React.FC<ButtonProps> = ({ type = 'button', children, disabled = f
   return (
     <button
       type={type}
-      className="w-full bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg transition-colors"
+      className="w-full bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg transition-colors hover:cursor-pointer"
       disabled={disabled}
     >
       {children}

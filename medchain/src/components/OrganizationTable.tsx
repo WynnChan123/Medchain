@@ -94,17 +94,17 @@ const OrganizationTable: React.FC<TableSize> = ({ itemsPerPage }) => {
   };
 
   return (
-    <div className="w-full h-full overflow-auto p-4">
+    <div className="w-full h-full overflow-auto p-4 justify-center flex-1 pt-10">
       <table className="table-auto w-full text-left border-collapse border border-gray-300">
         <thead className="bg-blue-100 w-full">
           <tr>
             <th className="px-6 py-3 font-medium text-gray-700">ID</th>
             <th className="px-6 py-3 font-medium text-gray-700">Name</th>
-            <th className="px-6 py-3 font-medium text-gray-700">Type</th>
+            <th className="px-6 py-3 font-medium text-gray-700">User Role</th>
             <th className="px-6 py-3 font-medium text-gray-700">Created At</th>
-            <th className="px-6 py-3 font-medium text-gray-700">
-              Public Key Address
-            </th>
+            <th className="px-6 py-3 font-medium text-gray-700">Status</th>
+            <th className="px-6 py-3 font-medium text-gray-700">Public Key Address</th>
+            <th className="px-6 py-3 font-medium text-gray-700">Authorized By</th>
           </tr>
         </thead>
         <tbody>

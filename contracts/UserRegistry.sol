@@ -29,7 +29,8 @@ contract UserManagement is Med2ChainStructs {
             createdAt: block.timestamp,
             isActive: true,
             walletAddress: msg.sender,
-            authorizedBy: msg.sender
+            authorizedBy: msg.sender,
+            isWalletRegistered: true
         });
 
         encryptedIdToUser[hashedDeployerId] = users[msg.sender];
@@ -43,15 +44,18 @@ contract UserManagement is Med2ChainStructs {
     ) external {
         require(users[walletAddress].walletAddress == address(0), "User already registered");
         require(encryptedId != bytes32(0), "Encrypted ID required");
-
+        //admin can only register other roles except patient
+        //patients can only register themselves
         if(role == userRole.Patient){
+            require(msg.sender == walletAddress, "Patients can only register themselves");
             users[walletAddress] = User({
                 role: userRole.Patient,
                 createdAt: block.timestamp,
                 encryptedId: encryptedId,
                 isActive: true,
                 walletAddress: walletAddress,
-                authorizedBy: walletAddress
+                authorizedBy: walletAddress,
+                isWalletRegistered: true
             });
 
         }else{
@@ -62,7 +66,8 @@ contract UserManagement is Med2ChainStructs {
                 encryptedId: encryptedId,
                 isActive: true,
                 walletAddress: walletAddress,
-                authorizedBy: msg.sender
+                authorizedBy: msg.sender,
+                isWalletRegistered: true
             });
         }
 
@@ -73,7 +78,18 @@ contract UserManagement is Med2ChainStructs {
     }
 
     function getUserRole(address user) external view returns (userRole) {
+        if(!users[user].isWalletRegistered) {
+            return userRole.Unregistered;
+        }
         return users[user].role;
+    }
+
+    function userExists(address user) external view returns (bool) {
+        return users[user].walletAddress != address(0);
+    }
+
+    function getUserId(address user) external view returns (bytes32) {
+        return users[user].encryptedId;
     }
 
     function getAllUsers() public view returns (User[] memory){

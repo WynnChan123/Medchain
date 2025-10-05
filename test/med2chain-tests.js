@@ -49,7 +49,7 @@ describe('Healthcare System Contracts', function () {
     it('Should set admin correctly on deployment', async function () {
       expect(await userManagement.admin()).to.equal(await admin.getAddress());
       const adminUser = await userManagement.users(await admin.getAddress());
-      expect(adminUser.role).to.equal(3); // Admin role
+      expect(adminUser.role).to.equal(4); // Admin role
       expect(adminUser.isActive).to.be.true;
     });
 
@@ -57,13 +57,13 @@ describe('Healthcare System Contracts', function () {
       await userManagement.connect(patient).registerUser(
         await patient.getAddress(),
         patientHashedId,
-        0 // Patient role
+        1 // Patient role
       );
 
       const patientUser = await userManagement.users(
         await patient.getAddress()
       );
-      expect(patientUser.role).to.equal(0); // Patient role
+      expect(patientUser.role).to.equal(1); // Patient role
       expect(patientUser.isActive).to.be.true;
       expect(patientUser.authorizedBy).to.equal(await patient.getAddress());
     });
@@ -72,11 +72,11 @@ describe('Healthcare System Contracts', function () {
       await userManagement.connect(admin).registerUser(
         await doctor.getAddress(),
         doctorHashedId,
-        1 // HealthcareProvider role
+        2 // HealthcareProvider role
       );
 
       const doctorUser = await userManagement.users(await doctor.getAddress());
-      expect(doctorUser.role).to.equal(1); // HealthcareProvider role
+      expect(doctorUser.role).to.equal(2); // HealthcareProvider role
       expect(doctorUser.authorizedBy).to.equal(await admin.getAddress());
     });
 
@@ -85,7 +85,7 @@ describe('Healthcare System Contracts', function () {
         userManagement.connect(patient).registerUser(
           await doctor.getAddress(),
           doctorHashedId,
-          1 // HealthcareProvider role
+          2 // HealthcareProvider role
         )
       ).to.be.revertedWith('Only admin can register users');
     });
@@ -93,12 +93,12 @@ describe('Healthcare System Contracts', function () {
     it('Should prevent duplicate registrations', async function () {
       await userManagement
         .connect(patient)
-        .registerUser(await patient.getAddress(), patientHashedId, 0);
+        .registerUser(await patient.getAddress(), patientHashedId, 1);
 
       await expect(
         userManagement
           .connect(patient)
-          .registerUser(await patient.getAddress(), patientHashedId, 0)
+          .registerUser(await patient.getAddress(), patientHashedId, 1)
       ).to.be.revertedWith('User already registered');
     });
 
@@ -106,17 +106,52 @@ describe('Healthcare System Contracts', function () {
       // Register patient first
       await userManagement
         .connect(patient)
-        .registerUser(await patient.getAddress(), patientHashedId, 0);
+        .registerUser(await patient.getAddress(), patientHashedId, 1);
 
       // Admin updates role
       await userManagement
         .connect(admin)
-        .updateRoles(await patient.getAddress(), 2); // Insurer role
+        .updateRoles(await patient.getAddress(), 3); // Insurer role
 
       const updatedUser = await userManagement.users(
         await patient.getAddress()
       );
-      expect(updatedUser.role).to.equal(2); // Insurer role
+      expect(updatedUser.role).to.equal(3); // Insurer role
+    });
+
+    it('Should correctly identify existing users', async function () {
+      // Check that admin exists (deployed with contract)
+      expect(await userManagement.userExists(await admin.getAddress())).to.be.true;
+
+      // Check that unregistered user doesn't exist
+      expect(await userManagement.userExists(await patient.getAddress())).to.be.false;
+
+      // Register patient
+      await userManagement
+        .connect(patient)
+        .registerUser(await patient.getAddress(), patientHashedId, 1);
+
+      // Check that patient now exists
+      expect(await userManagement.userExists(await patient.getAddress())).to.be.true;
+    });
+
+    it('Should return false for zero address', async function () {
+      expect(await userManagement.userExists('0x0000000000000000000000000000000000000000')).to.be.false;
+    });
+
+    it('Should work correctly with getUserRole for non-existent users', async function () {
+      // For non-existent users, getUserRole should return Unregistered (0) due to Solidity defaults
+      // But userExists should return false
+      const nonExistentUser = await doctor.getAddress();
+
+      expect(await userManagement.userExists(nonExistentUser)).to.be.false;
+      expect(await userManagement.getUserRole(nonExistentUser)).to.equal(0); // Unregistered role (default)
+
+      // After registration, both should work correctly
+      await userManagement.connect(admin).registerUser(nonExistentUser, doctorHashedId, 2);
+
+      expect(await userManagement.userExists(nonExistentUser)).to.be.true;
+      expect(await userManagement.getUserRole(nonExistentUser)).to.equal(2); // HealthcareProvider role
     });
   });
 
@@ -126,14 +161,14 @@ describe('Healthcare System Contracts', function () {
       await userManagement.connect(patient).registerUser(
         await patient.getAddress(),
         patientHashedId,
-        0 // Patient role
+        1 // Patient role
       );
 
       // Register doctor
       await userManagement.connect(admin).registerUser(
         await doctor.getAddress(),
         doctorHashedId,
-        1 // HealthcareProvider role
+        2 // HealthcareProvider role
       );
     });
 
@@ -260,8 +295,8 @@ describe('Healthcare System Contracts', function () {
 
     beforeEach(async function () {
       // Register users
-      await userManagement.connect(patient).registerUser(await patient.getAddress(), patientHashedId, 0);
-      await userManagement.connect(admin).registerUser(await doctor.getAddress(), doctorHashedId, 1);
+      await userManagement.connect(patient).registerUser(await patient.getAddress(), patientHashedId, 1);
+      await userManagement.connect(admin).registerUser(await doctor.getAddress(), doctorHashedId, 2);
 
 
       // Add medical record
@@ -360,10 +395,10 @@ describe('Healthcare System Contracts', function () {
       // Setup complete system
       await userManagement
         .connect(patient)
-        .registerUser(await patient.getAddress(), patientHashedId, 0);
+        .registerUser(await patient.getAddress(), patientHashedId, 1);
       await userManagement
         .connect(admin)
-        .registerUser(await doctor.getAddress(), doctorHashedId, 1);
+        .registerUser(await doctor.getAddress(), doctorHashedId, 2);
 
       await medicalRecords
         .connect(doctor)
@@ -497,11 +532,11 @@ describe('Healthcare System Contracts', function () {
       const recordId = '';
       await userManagement
         .connect(patient)
-        .registerUser(await patient.getAddress(), patientHashedId, 0);
+        .registerUser(await patient.getAddress(), patientHashedId, 1);
 
       await userManagement
         .connect(admin)
-        .registerUser(await doctor.getAddress(), doctorHashedId, 1);
+        .registerUser(await doctor.getAddress(), doctorHashedId, 2);
 
       await expect(
         medicalRecords
@@ -536,10 +571,10 @@ describe('Healthcare System Contracts', function () {
     it('Should prevent updates to non-updatable fields', async function () {
       await userManagement
         .connect(patient)
-        .registerUser(await patient.getAddress(), patientHashedId, 0);
+        .registerUser(await patient.getAddress(), patientHashedId, 1);
       await userManagement
         .connect(admin)
-        .registerUser(await doctor.getAddress(), doctorHashedId, 1);
+        .registerUser(await doctor.getAddress(), doctorHashedId, 2);
 
       const recordId = 'LAB_001';
       await medicalRecords

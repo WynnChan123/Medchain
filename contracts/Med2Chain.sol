@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 abstract contract Med2ChainStructs {
     enum userRole{
+        Unregistered,
         Patient,
         HealthcareProvider,
         Insurer,
@@ -18,6 +19,7 @@ abstract contract Med2ChainStructs {
         bool isActive;
         address walletAddress;
         address authorizedBy;
+        bool isWalletRegistered;
     }
 
     struct PatientProfile{

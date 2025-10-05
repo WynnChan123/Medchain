@@ -2,7 +2,10 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import prisma from '../lib/prisma.js';
 import authConfig from '../config/auth.config.js';
-import { isAddress } from 'ethers';
+import { ethers, isAddress } from 'ethers';
+import 'dotenv/config';
+
+const DEPLOYED_CONTRACT = process.env.CONTRACT_ADDRESS;
 
 export const signUp = async (req, res) => {
   const { name, email, password } = req.body;

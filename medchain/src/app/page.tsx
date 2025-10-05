@@ -4,12 +4,13 @@ import InputField from '@/components/InputField';
 import Button from '@/components/Button';
 import { useEffect, useState } from 'react';
 import Connect from '@/components/Connect';
-import useStore from "@/store/userStore";
-import { getRole } from '@/lib/integration';
+import useStore from '@/store/userStore';
+import { getRole, registerUser } from '@/lib/integration';
 // import { User, UserSquare } from 'lucide-react';
 import { UserRole } from '../../utils/userRole';
 import { ethers } from 'ethers';
 import { User } from '@reown/appkit';
+import { toast } from 'react-toastify';
 
 export default function Login() {
   const [username, setUsername] = useState<string>('');
@@ -18,12 +19,12 @@ export default function Login() {
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [emailError, setEmailError] = useState<string>('');
   const setRole = useStore((state) => state.setRole);
-  const [name, setName] = useState<string>("");
+  const [name, setName] = useState<string>('');
   // const [role, setRole] = useState<string>("");
 
-    useEffect(() => {
-      console.log("Public Key: ", publicKey);
-    },[publicKey]);
+  useEffect(() => {
+    console.log('Public Key: ', publicKey);
+  }, [publicKey]);
   // Email validation function
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -34,13 +35,13 @@ export default function Login() {
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const emailValue = e.target.value;
     setUsername(emailValue);
-    
+
     // Clear error when email is empty
     if (!emailValue) {
       setEmailError('');
       return;
     }
-    
+
     // Validate email format
     if (!validateEmail(emailValue)) {
       setEmailError('Please enter a valid email address');
@@ -52,7 +53,7 @@ export default function Login() {
   const handleLogin = async () => {
     // Clear previous error messages
     setErrorMessage('');
-    
+
     if (!publicKey || !username || !password) {
       setErrorMessage('Please connect wallet and enter username/password');
       return;
@@ -73,55 +74,114 @@ export default function Login() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: username, password, publicKey }),
       });
-        const data = await response.json();
+      const data = await response.json();
 
-    if (!window.ethereum) {
-      setErrorMessage('Ethereum provider not found. Please install MetaMask.');
-      return;
-    }
-    const provider = new ethers.providers.Web3Provider(window.ethereum as ethers.providers.ExternalProvider);
-    await provider.send("eth_requestAccounts", []);
-    const signer = provider.getSigner();
-    const address = await signer.getAddress();
-    const network = await provider.getNetwork();
-    console.log("Connected to network:", network.chainId);
+      if (!window.ethereum) {
+        setErrorMessage(
+          'Ethereum provider not found. Please install MetaMask.'
+        );
+        return;
+      }
+      const provider = new ethers.providers.Web3Provider(
+        window.ethereum as ethers.providers.ExternalProvider
+      );
+      await provider.send('eth_requestAccounts', []);
+      const signer = provider.getSigner();
+      const address = await signer.getAddress();
+      const network = await provider.getNetwork();
+      if (network.chainId !== 11155111) {
+        setErrorMessage('Please connect to the Sepolia network in MetaMask.');
+        return;
+      }
+      // console.log('Connected to network:', network.chainId);
 
-        if(!response.ok){
-          setErrorMessage(data.error || 'Login failed');
-          return;
-        }
-      
+      if (!response.ok) {
+        setErrorMessage(data.error || 'Login failed');
+        return;
+      }
+
       if (data.token) {
         setErrorMessage('Login successful');
         localStorage.setItem('token', data.token);
+
         // Fetch user profile with the token
-        const profileRes = await fetch('http://localhost:8080/api/user/profile', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${data.token}`,
-          },
-        });
-        const user = await profileRes.json();
-        setName(user.name || "");
-
-          const roleId = await getRole(publicKey);
-          // alert(`On chain role:  ${roleId}`);
-          const roleName = UserRole[roleId] as keyof typeof UserRole;
-          alert(`Role from enum: ${roleName}`);
-          setRole(roleName);
-
-          if (roleId === UserRole.Admin) {
-            window.location.href = '/Admin';
-          } else if(roleId === UserRole.Patient){
-            window.location.href = '/Patient';
-          }else if(roleId === UserRole.Insurer){
-            window.location.href = '/Insurer'
-          }else if(roleId === UserRole.HealthcareProvider){
-            window.location.href = '/HealthcareProvider'
-          }else{
-            throw new Error("Not a valid user role");
+        const profileRes = await fetch(
+          'http://localhost:8080/api/user/profile',
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${data.token}`,
+            },
           }
+        );
+        const user = await profileRes.json();
+        setName(user.name || '');
+
+        try {
+          const roleId = await getRole(publicKey);
+          alert('Role ID from blockchain:' + roleId);
+          alert('Type of roleId:' + typeof roleId);
+          alert('Is null?'+ roleId === null);
+
+          if (roleId === UserRole.Unregistered) {
+            setErrorMessage(
+              'User role not found on blockchain. Registering user on chain...'
+            );
+
+            const encryptedId = ethers.utils.keccak256(
+              ethers.utils.toUtf8Bytes(user.id)
+            );
+            alert('Encrypted ID:'+ encryptedId);
+            const walletaddress = await signer.getAddress();
+            console.log("Signer address:", walletaddress);
+            console.log("Public key (from backend or UI):", publicKey);
+            await registerUser(walletaddress, encryptedId, UserRole.Patient);
+            toast.success('Registration on blockchain is successful');
+            
+            // Get the role again after registration
+            const finalRole = await getRole(publicKey);
+            if (finalRole === UserRole.Unregistered) {
+              throw new Error('Failed to get role after registration');
+            }
+            
+            const roleName = UserRole[finalRole] as keyof typeof UserRole;
+            alert('Role from enum:'+ roleName);
+            setRole(roleName);
+
+            if (finalRole === UserRole.Admin) {
+              window.location.href = '/Admin';
+            } else if (finalRole === UserRole.Patient) {
+              window.location.href = '/Patient';
+            } else if (finalRole === UserRole.Insurer) {
+              window.location.href = '/Insurer';
+            } else if (finalRole === UserRole.HealthcareProvider) {
+              window.location.href = '/HealthcareProvider';
+            } else {
+              throw new Error('Not a valid user role');
+            }
+          } else {
+            // User already exists, redirect based on existing role
+            const roleName = UserRole[roleId] as keyof typeof UserRole;
+            console.log('Existing role from enum:', roleName);
+            setRole(roleName);
+
+            if (roleId === UserRole.Admin) {
+              window.location.href = '/Admin';
+            } else if (roleId === UserRole.Patient) {
+              window.location.href = '/Patient';
+            } else if (roleId === UserRole.Insurer) {
+              window.location.href = '/Insurer';
+            } else if (roleId === UserRole.HealthcareProvider) {
+              window.location.href = '/HealthcareProvider';
+            } else {
+              throw new Error('Not a valid user role');
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching role from blockchain:', error);
+          setErrorMessage('Error during blockchain interaction: ' + (error as Error).message);
+        }
       } else {
         setErrorMessage('Login failed: ' + (data.error || 'Unknown error'));
         console.log('Login failed: ', data);
@@ -160,7 +220,9 @@ export default function Login() {
               value={username}
               onChange={handleEmailChange}
             />
-            {emailError && <p className="text-red-400 text-sm mt-1">{emailError}</p>}
+            {emailError && (
+              <p className="text-red-400 text-sm mt-1">{emailError}</p>
+            )}
           </div>
           <InputField
             id="password"
@@ -178,10 +240,21 @@ export default function Login() {
               Forgot Password?
             </a>
           </div>
-          <Button type="submit" disabled={!publicKey || !username || !password || !!emailError}>
+          <Button
+            type="submit"
+            disabled={!publicKey || !username || !password || !!emailError}
+          >
             Login to your Account
           </Button>
-          {errorMessage && <p className={`${errorMessage == "Login Successful"} ?? text-red-400 text-center mt-2: `}>{errorMessage}</p>}
+          {errorMessage && (
+            <p
+              className={`${
+                errorMessage == 'Login Successful'
+              } ?? text-green-400 text-center mt-2: `}
+            >
+              {errorMessage}
+            </p>
+          )}
         </form>
         <div className="mt-6 text-center">
           <p className="text-white">or Sign in with</p>
@@ -201,17 +274,22 @@ export default function Login() {
             <a href="#" className="text-blue-400 hover:underline">
               <span className="sr-only">LinkedIn</span>
               <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-1.337-.026-3.06-1.872-3.06-1.872 0-2.159 1.452-2.159 2.956v5.708h-3v-11h2.879v1.548h.041c.398-.753 1.369-1.548 2.817-1.548 3.018 0 3.579 1.985 3.579 4.567v6.433z"/>
+                <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-1.337-.026-3.06-1.872-3.06-1.872 0-2.159 1.452-2.159 2.956v5.708h-3v-11h2.879v1.548h.041c.398-.753 1.369-1.548 2.817-1.548 3.018 0 3.579 1.985 3.579 4.567v6.433z" />
               </svg>
             </a>
           </div>
         </div>
         <p className="mt-6 text-center text-gray-400">
-          Don't have account? <a href="/SignUp" className="text-blue-400 hover:underline">Register Now</a>
+          Don't have account?{' '}
+          <a href="/SignUp" className="text-blue-400 hover:underline">
+            Register Now
+          </a>
         </p>
       </div>
       <div className="w-1/2 justify-center hidden md:flex overflow-hidden flex-col items-center">
-        <div className="text-white justify-center flex mb-4 font-bold">"Specialized in keeping your medical data private"</div>
+        <div className="text-white justify-center flex mb-4 font-bold">
+          "Specialized in keeping your medical data private"
+        </div>
         <img
           src="/medchain.svg"
           alt="Login Illustration"

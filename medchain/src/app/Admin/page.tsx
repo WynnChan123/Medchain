@@ -9,7 +9,7 @@ const Dashboard = () => {
   const router = useRouter();
   return (
     <div>
-      <div className="w-1/3 min-w-[350px] max-w-[700px] h-[420px] bg-white rounded-lg overflow-x-auto text-xs shadow p-6 flex-1 overflow-y-hidden">
+      <div className="w-full h-[420px] bg-white rounded-lg overflow-x-auto text-xs shadow p-6 flex-1 overflow-y-hidden">
         <div className="flex justify-end">
           <button
             className="flex justify-items-end bg-gray-500 text-white rounded-lg px-4 py-2"

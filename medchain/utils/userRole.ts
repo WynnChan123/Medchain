@@ -1,6 +1,7 @@
 export enum UserRole {
-  Patient = 0,
-  HealthcareProvider = 1,
-  Insurer = 2,
-  Admin = 3,
+  Unregistered = 0,
+  Patient = 1,
+  HealthcareProvider = 2,
+  Insurer = 3,
+  Admin = 4,
 }
