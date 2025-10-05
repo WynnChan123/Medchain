@@ -62,7 +62,7 @@ export async function registerUser(wallet: string, encryptedId: string, role: nu
       return await tx.wait();
   }catch(error: any){
     console.error('Error in registering wallet on blockchain:', error);
-    throw new Error(error.reason)
+    throw new Error(error.reason || error.message || 'Transaction failed');
   }
 }
 
@@ -76,6 +76,11 @@ export async function assignRole(address: string, role: number){
   const contract = await writeContract();
   const tx = await contract.assignRole(address, role);
   return await tx.wait();
+}
+
+export async function userExists(address: string): Promise<boolean> {
+  const contract = await readContract();
+  return await contract.userExists(address);
 }
 
 

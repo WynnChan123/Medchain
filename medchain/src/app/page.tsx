@@ -5,7 +5,12 @@ import Button from '@/components/Button';
 import { useEffect, useState } from 'react';
 import Connect from '@/components/Connect';
 import useStore from '@/store/userStore';
-import { getRole, registerUser } from '@/lib/integration';
+import {
+  getRole,
+  readContract,
+  registerUser,
+  userExists,
+} from '@/lib/integration';
 // import { User, UserSquare } from 'lucide-react';
 import { UserRole } from '../../utils/userRole';
 import { ethers } from 'ethers';
@@ -87,7 +92,7 @@ export default function Login() {
       );
       await provider.send('eth_requestAccounts', []);
       const signer = provider.getSigner();
-      const address = await signer.getAddress();
+      const signerAddress = await signer.getAddress();
       const network = await provider.getNetwork();
       if (network.chainId !== 11155111) {
         setErrorMessage('Please connect to the Sepolia network in MetaMask.');
@@ -119,10 +124,10 @@ export default function Login() {
         setName(user.name || '');
 
         try {
-          const roleId = await getRole(publicKey);
+          const roleId = await getRole(signerAddress);
           alert('Role ID from blockchain:' + roleId);
           alert('Type of roleId:' + typeof roleId);
-          alert('Is null?'+ roleId === null);
+          alert('Is null?' + roleId === null);
 
           if (roleId === UserRole.Unregistered) {
             setErrorMessage(
@@ -132,21 +137,33 @@ export default function Login() {
             const encryptedId = ethers.utils.keccak256(
               ethers.utils.toUtf8Bytes(user.id)
             );
-            alert('Encrypted ID:'+ encryptedId);
-            const walletaddress = await signer.getAddress();
-            console.log("Signer address:", walletaddress);
-            console.log("Public key (from backend or UI):", publicKey);
-            await registerUser(walletaddress, encryptedId, UserRole.Patient);
+            alert('Encrypted ID:' + encryptedId);
+            console.log('Signer address:', signerAddress);
+            console.log('Public key (from backend or UI):', publicKey);
+            const alreadyExists = await userExists(signerAddress);
+            console.log('User already exists on blockchain?', alreadyExists);
+
+            if (alreadyExists) {
+              throw new Error(
+                'User already registered on blockchain. Please use a different wallet address.'
+              );
+            }
+            console.log('hello');
+            const txReceipt = await registerUser(signerAddress, encryptedId, 1);
+            console.log('Transaction mined:', txReceipt);
+            console.log('hello');
+
+            await new Promise((resolve) => setTimeout(resolve, 2000));
             toast.success('Registration on blockchain is successful');
-            
+
             // Get the role again after registration
-            const finalRole = await getRole(publicKey);
+            const finalRole = await getRole(signerAddress);
             if (finalRole === UserRole.Unregistered) {
               throw new Error('Failed to get role after registration');
             }
-            
+
             const roleName = UserRole[finalRole] as keyof typeof UserRole;
-            alert('Role from enum:'+ roleName);
+            alert('Role from enum:' + roleName);
             setRole(roleName);
 
             if (finalRole === UserRole.Admin) {
@@ -178,9 +195,15 @@ export default function Login() {
               throw new Error('Not a valid user role');
             }
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error fetching role from blockchain:', error);
-          setErrorMessage('Error during blockchain interaction: ' + (error as Error).message);
+          if (error.reason) {
+            throw new Error(error.reason);
+          } else if (error.message) {
+            throw new Error(error.message);
+          } else {
+            throw new Error('An unknown blockchain error occurred.');
+          }
         }
       } else {
         setErrorMessage('Login failed: ' + (data.error || 'Unknown error'));

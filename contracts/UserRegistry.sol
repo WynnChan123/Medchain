@@ -37,7 +37,8 @@ contract UserManagement is Med2ChainStructs {
         userAddresses.push(msg.sender);
     }
 
-    function registerUser(
+    function registerUserFromSystem(
+        address sender,
         address walletAddress,
         bytes32 encryptedId,
         userRole role
@@ -47,7 +48,7 @@ contract UserManagement is Med2ChainStructs {
         //admin can only register other roles except patient
         //patients can only register themselves
         if(role == userRole.Patient){
-            require(msg.sender == walletAddress, "Patients can only register themselves");
+            require(sender == walletAddress, "Patients can only register themselves");
             users[walletAddress] = User({
                 role: userRole.Patient,
                 createdAt: block.timestamp,
@@ -59,14 +60,14 @@ contract UserManagement is Med2ChainStructs {
             });
 
         }else{
-            require(users[msg.sender].role == userRole.Admin, "Only admin can register users");
+            require(users[sender].role == userRole.Admin, "Only admin can register users");
             users[walletAddress] = User({
                 role: role,
                 createdAt: block.timestamp,
                 encryptedId: encryptedId,
                 isActive: true,
                 walletAddress: walletAddress,
-                authorizedBy: msg.sender,
+                authorizedBy: sender,
                 isWalletRegistered: true
             });
         }
@@ -74,7 +75,7 @@ contract UserManagement is Med2ChainStructs {
         encryptedIdToUser[encryptedId] = users[walletAddress];  //map the user data to the encrypted ID
 
         userAddresses.push(walletAddress);
-        emit UserRegistered(walletAddress, role, role == userRole.Patient? walletAddress: msg.sender);
+        emit UserRegistered(walletAddress, role, role == userRole.Patient? walletAddress: sender);
     }
 
     function getUserRole(address user) external view returns (userRole) {

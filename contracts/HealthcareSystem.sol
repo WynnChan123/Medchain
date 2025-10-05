@@ -27,7 +27,7 @@ contract HealthcareSystem is Med2ChainStructs {
         bytes32 encryptedId,
         userRole role
     ) external {
-        userRegistry.registerUser(wallet, encryptedId, role);
+        userRegistry.registerUserFromSystem(msg.sender, wallet, encryptedId, role);
     }
 
     // Example wrapper: Get a medical record if access is allowed
@@ -46,4 +46,10 @@ contract HealthcareSystem is Med2ChainStructs {
     function getUserRole(address user) external view returns (userRole) {
         return userRegistry.getUserRole(user);
     }
+
+    //Wrapper for checking if user exists
+    function userExists(address user) external view returns (bool) {
+        return userRegistry.userExists(user);
+    }
 }
+
