@@ -13,6 +13,8 @@ contract UserManagement is Med2ChainStructs {
     
     mapping(bytes32 => User) public encryptedIdToUser;
     mapping(address => User) public users;
+    mapping(address => mapping(userRole => bool)) public userRoles;
+    mapping(address => bool) public authorizedContracts;
 
     event UserRegistered(address indexed walletAddress, userRole role, address authorizedBy);
     event RoleDefined(address indexed walletAddress, userRole role, uint timestamp);
@@ -24,7 +26,6 @@ contract UserManagement is Med2ChainStructs {
 
         // Register the deployer as admin
         users[msg.sender] = User({
-            role: userRole.Admin,
             encryptedId: hashedDeployerId,
             createdAt: block.timestamp,
             isActive: true,
@@ -32,6 +33,8 @@ contract UserManagement is Med2ChainStructs {
             authorizedBy: msg.sender,
             isWalletRegistered: true
         });
+
+        userRoles[msg.sender][userRole.Admin] = true;
 
         encryptedIdToUser[hashedDeployerId] = users[msg.sender];
         userAddresses.push(msg.sender);
@@ -50,7 +53,6 @@ contract UserManagement is Med2ChainStructs {
         if(role == userRole.Patient){
             require(sender == walletAddress, "Patients can only register themselves");
             users[walletAddress] = User({
-                role: userRole.Patient,
                 createdAt: block.timestamp,
                 encryptedId: encryptedId,
                 isActive: true,
@@ -59,18 +61,20 @@ contract UserManagement is Med2ChainStructs {
                 isWalletRegistered: true
             });
 
-        }else{
-            require(users[sender].role == userRole.Admin, "Only admin can register users");
-            users[walletAddress] = User({
-                role: role,
-                createdAt: block.timestamp,
-                encryptedId: encryptedId,
-                isActive: true,
-                walletAddress: walletAddress,
-                authorizedBy: sender,
-                isWalletRegistered: true
-            });
+            userRoles[walletAddress][userRole.Patient] = true;
         }
+        // else{
+        //     require(users[sender].role == userRole.Admin, "Only admin can register users");
+        //     users[walletAddress] = User({
+        //         role: role,
+        //         createdAt: block.timestamp,
+        //         encryptedId: encryptedId,
+        //         isActive: true,
+        //         walletAddress: walletAddress,
+        //         authorizedBy: sender,
+        //         isWalletRegistered: true
+        //     });
+        // }
 
         encryptedIdToUser[encryptedId] = users[walletAddress];  //map the user data to the encrypted ID
 
@@ -82,7 +86,15 @@ contract UserManagement is Med2ChainStructs {
         if(!users[user].isWalletRegistered) {
             return userRole.Unregistered;
         }
-        return users[user].role;
+        if (userRoles[user][userRole.HealthcareProvider]) {
+            return userRole.HealthcareProvider;
+        } else if (userRoles[user][userRole.Insurer]) {
+            return userRole.Insurer;
+        } else if (userRoles[user][userRole.Admin]) {
+            return userRole.Admin;
+        }else {
+            return userRole.Patient;
+        }
     }
 
     function userExists(address user) external view returns (bool) {
@@ -102,21 +114,25 @@ contract UserManagement is Med2ChainStructs {
         return allUsers;
     }
 
-    function assignRoles(address user, userRole role)  external {
-        require(users[msg.sender].role == userRole.Admin, "Only admins are allowed to define roles");
+    // function assignRoles(address user, userRole role)  external {
+    //     require(userRoles[msg.sender][userRole.Admin] == true, "Only admins are allowed to define roles");
+    //     require(users[user].walletAddress != address(0), "User not registered");
+
+    //     userRoles[user][role] = true;
+
+    //     emit RoleDefined(user, role, block.timestamp);
+    // }
+
+    function setUserRole(address user, userRole newRole) external {
+        require(userRoles[msg.sender][userRole.Admin] == true || authorizedContracts[msg.sender], "Only admins are allowed to set additional roles");
         require(users[user].walletAddress != address(0), "User not registered");
+        
 
-        users[user].role = role;
-
-        emit RoleDefined(user, role, block.timestamp);
+        userRoles[user][newRole] = true;
     }
 
-    function updateRoles(address user, userRole newRole) external {
-        require(users[msg.sender].role == userRole.Admin, "Only admins are allowed to update roles");
-        require(users[user].walletAddress != address(0), "User not registered");
-
-        users[user].role = newRole;
-
-        emit RoleUpdated(user, newRole, msg.sender, block.timestamp);
+    function authorizeContract(address _contract) external {
+        require(userRoles[msg.sender][userRole.Admin] == true, "Only admin can authorize contracts");
+        authorizedContracts[_contract] = true;
     }
 }

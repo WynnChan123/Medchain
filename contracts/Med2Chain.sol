@@ -13,7 +13,6 @@ abstract contract Med2ChainStructs {
         Admin
     }
     struct User{
-        userRole role;
         bytes32 encryptedId;
         uint256 createdAt;
         bool isActive;
@@ -63,6 +62,7 @@ abstract contract Med2ChainStructs {
 interface IUserManagement {
     function getUserRole(address user) external view returns (Med2ChainStructs.userRole);
     function users(address user) external view returns (Med2ChainStructs.User memory);
+    function setUserRole(address user, Med2ChainStructs.userRole) external;
 }
 
 interface IMedicalRecords {
@@ -73,3 +73,7 @@ interface IMedicalRecords {
 interface IAccessControl {
     function accessControl(address patient, address requester, string memory recordId) external view returns (bool);
 }
+
+// interface IRoleUpgrade {
+//     function getEncryptedKeyForCaller(uint _requestId) external view returns (bytes memory);
+// }

@@ -17,14 +17,18 @@ const TopBar = ({userName}:{userName:string})=>{
   }
 
   return(
-    <div className="bg-blue-950 w-full flex justify-between items-center px-6 py-3 shadow-sm">
+    <div className="bg-blue-950 w-full flex justify-between items-center px-6 py-4 shadow-sm">
       <div className="flex items-center space-x-6">
-        <Bell className="text-white" />
+        <button className="hover:bg-gray-400 p-2 rounded-full">
+          <Bell className="text-white" />
+        </button>
         <div className="flex items-center space-x-2">
-          <User2 className="text-white" />
+          <button className="hover:bg-gray-400 p-2 rounded-full">
+            <User2 className="text-white" />
+          </button>
           <div className="text-sm">
             <div className="text-white font-medium">Welcome back , {userName}</div>
-            <div className="text-white">{role}</div>
+            {/* <div className="text-white">{role}</div> */}
           </div>
         </div>
       </div>

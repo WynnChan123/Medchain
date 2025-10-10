@@ -5,20 +5,24 @@ import "./Med2Chain.sol";
 import "./UserRegistry.sol";
 import "./MedicalRecords.sol";
 import "./AccessControl.sol";
+import "./RoleUpgrade.sol";
 
 contract HealthcareSystem is Med2ChainStructs {
     UserManagement private userRegistry;
     MedicalRecordsManagement private medicalRecords;
     AccessControlManagement private accessControl;
+    RoleUpgrade private roleUpgrade;
 
     constructor(
         address _userRegistry,
         address _medicalRecords,
-        address _accessControl
+        address _accessControl,
+        address _roleUpgrade
     ) {
         userRegistry = UserManagement(_userRegistry);
         medicalRecords = MedicalRecordsManagement(_medicalRecords);
         accessControl = AccessControlManagement(_accessControl);
+        roleUpgrade = RoleUpgrade(_roleUpgrade);
     }
 
     // Example wrapper: Register user via HealthcareSystem
@@ -50,6 +54,22 @@ contract HealthcareSystem is Med2ChainStructs {
     //Wrapper for checking if user exists
     function userExists(address user) external view returns (bool) {
         return userRegistry.userExists(user);
+    }
+
+    function submitUpgradeRequest(address patient, string calldata cid, address[] calldata admins, userRole newRole, bytes[] calldata encryptedKeys) external {
+        roleUpgrade.submitUpgradeRequest(patient, cid, newRole, admins, encryptedKeys);
+    }
+
+    function approveRequest(uint _requestId, address userToUpgrade) external {
+        roleUpgrade.approveRequest(_requestId, userToUpgrade);
+    }
+
+    function rejectRequest(uint _requestId) external {
+        roleUpgrade.rejectRequest(_requestId);
+    }
+
+    function getEncryptedKeyForCaller(uint _requestId) external view returns (bytes memory) {
+        return roleUpgrade.getEncryptedKeyForCaller(_requestId);
     }
 }
 

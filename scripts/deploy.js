@@ -4,7 +4,7 @@ async function main() {
   // 1. Deploy UserRegistry
   const UserManagement = await ethers.getContractFactory("UserManagement");
   const userManagement = await UserManagement.deploy();
-  await userManagement.waitForDeployment(); // Updated for newer ethers
+  await userManagement.waitForDeployment();
   console.log("UserManagement deployed to:", await userManagement.getAddress());
 
   const MedicalRecordsManagement = await ethers.getContractFactory("MedicalRecordsManagement");
@@ -23,11 +23,20 @@ async function main() {
   await accessControl.waitForDeployment();
   console.log("AccessControlManagement deployed to:", await accessControl.getAddress());
 
+  const RoleUpgrade = await ethers.getContractFactory("RoleUpgrade");
+  const roleUpgrade = await RoleUpgrade.deploy(
+    await userManagement.getAddress(),
+    await medicalRecords.getAddress(),
+  );
+  await roleUpgrade.waitForDeployment();
+  console.log("RoleUpgrade deployed to:", await roleUpgrade.getAddress());
+
   const HealthcareSystem = await ethers.getContractFactory("HealthcareSystem");
   const healthcareSystem = await HealthcareSystem.deploy(
     await userManagement.getAddress(),
     await medicalRecords.getAddress(),
-    await accessControl.getAddress()
+    await accessControl.getAddress(),
+    await roleUpgrade.getAddress()
   );
   await healthcareSystem.waitForDeployment();
   console.log("HealthcareSystem deployed to:", await healthcareSystem.getAddress());

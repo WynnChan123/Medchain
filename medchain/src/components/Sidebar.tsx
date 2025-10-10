@@ -7,7 +7,7 @@ export default function Sidebar(){
 
   return(
     <div>
-      { role === UserRole.Admin && <AdminSideBar />}
+      { role === UserRole.Admin.toString() && <AdminSideBar />}
     </div>
   )
 }

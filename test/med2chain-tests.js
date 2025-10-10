@@ -1,11 +1,13 @@
 const { expect } = require('chai');
 const { ethers } = require('hardhat');
+const { anyValue } = require('@nomicfoundation/hardhat-chai-matchers/withArgs');
 
 describe('Healthcare System Contracts', function () {
   let userManagement;
   let medicalRecords;
   let accessControl;
   let healthcareSystem;
+  let roleUpgrade;
   let admin, patient, doctor, insurer;
 
   const adminHashedId =
@@ -18,7 +20,6 @@ describe('Healthcare System Contracts', function () {
     '0x456789013def1234567890123def1234567890123def1234567890123def123';
 
   beforeEach(async function () {
-    // Get signers
     [admin, patient, doctor, insurer] = await ethers.getSigners();
 
     // Deploy UserManagement first
@@ -45,20 +46,40 @@ describe('Healthcare System Contracts', function () {
     );
     await accessControl.waitForDeployment();
 
-      const HealthcareSystem = await ethers.getContractFactory('HealthcareSystem');
-      healthcareSystem = await HealthcareSystem.deploy(
-        await userManagement.getAddress(),
-        await medicalRecords.getAddress(),
-        await accessControl.getAddress()
-      );
-      await healthcareSystem.waitForDeployment();
+    const RoleUpgrade = await ethers.getContractFactory('RoleUpgrade');
+    roleUpgrade = await RoleUpgrade.deploy(
+      await userManagement.getAddress(),
+      await medicalRecords.getAddress()
+    );
+    await roleUpgrade.waitForDeployment();
+
+    // Deploy HealthcareSystem
+    const HealthcareSystem = await ethers.getContractFactory(
+      'HealthcareSystem'
+    );
+    healthcareSystem = await HealthcareSystem.deploy(
+      await userManagement.getAddress(),
+      await medicalRecords.getAddress(),
+      await accessControl.getAddress(),
+      await roleUpgrade.getAddress()
+    );
+    await healthcareSystem.waitForDeployment();
+
+    // Authorize RoleUpgrade contract to set user roles
+    await userManagement
+      .connect(admin)
+      .authorizeContract(await roleUpgrade.getAddress());
   });
 
   describe('UserManagement', function () {
     it('Should set admin correctly on deployment', async function () {
       expect(await userManagement.admin()).to.equal(await admin.getAddress());
       const adminUser = await userManagement.users(await admin.getAddress());
-      expect(adminUser.role).to.equal(4); // Admin role
+      const isAdmin = await userManagement.userRoles(
+        await admin.getAddress(),
+        4
+      );
+      expect(isAdmin).to.equal(true);
       expect(adminUser.isActive).to.be.true;
     });
 
@@ -66,37 +87,17 @@ describe('Healthcare System Contracts', function () {
       await healthcareSystem.connect(patient).registerUser(
         await patient.getAddress(),
         patientHashedId,
-        1 // Patient role
+        1
       );
 
-      const patientUser = await userManagement.users(
-        await patient.getAddress()
+      const patientUser = await userManagement.users(await patient.getAddress());
+      const isPatient = await userManagement.userRoles(
+        await patient.getAddress(),
+        1
       );
-      expect(patientUser.role).to.equal(1); // Patient role
+      expect(isPatient).to.equal(true);
       expect(patientUser.isActive).to.be.true;
       expect(patientUser.authorizedBy).to.equal(await patient.getAddress());
-    });
-
-    it('Should allow admin to register healthcare providers', async function () {
-      await healthcareSystem.connect(admin).registerUser(
-        await doctor.getAddress(),
-        doctorHashedId,
-        2 // HealthcareProvider role
-      );
-
-      const doctorUser = await userManagement.users(await doctor.getAddress());
-      expect(doctorUser.role).to.equal(2); // HealthcareProvider role
-      expect(doctorUser.authorizedBy).to.equal(await admin.getAddress());
-    });
-
-    it('Should prevent non-admin from registering healthcare providers', async function () {
-      await expect(
-        healthcareSystem.connect(patient).registerUser(
-          await doctor.getAddress(),
-          doctorHashedId,
-          2 // HealthcareProvider role
-        )
-      ).to.be.revertedWith('Only admin can register users');
     });
 
     it('Should prevent duplicate registrations', async function () {
@@ -111,56 +112,57 @@ describe('Healthcare System Contracts', function () {
       ).to.be.revertedWith('User already registered');
     });
 
-    it('Should allow admin to update roles', async function () {
-      // Register patient first
-      await healthcareSystem
-        .connect(patient)
-        .registerUser(await patient.getAddress(), patientHashedId, 1);
-
-      // Admin updates role
-      await userManagement
-        .connect(admin)
-        .updateRoles(await patient.getAddress(), 3); // Insurer role
-
-      const updatedUser = await userManagement.users(
-        await patient.getAddress()
-      );
-      expect(updatedUser.role).to.equal(3); // Insurer role
-    });
-
     it('Should correctly identify existing users', async function () {
-      // Check that admin exists (deployed with contract)
-      expect(await userManagement.userExists(await admin.getAddress())).to.be.true;
+      expect(await userManagement.userExists(await admin.getAddress())).to.be
+        .true;
 
-      // Check that unregistered user doesn't exist
-      expect(await userManagement.userExists(await patient.getAddress())).to.be.false;
+      expect(await userManagement.userExists(await patient.getAddress())).to.be
+        .false;
 
-      // Register patient
       await healthcareSystem
         .connect(patient)
         .registerUser(await patient.getAddress(), patientHashedId, 1);
 
-      // Check that patient now exists
-      expect(await userManagement.userExists(await patient.getAddress())).to.be.true;
+      expect(await userManagement.userExists(await patient.getAddress())).to.be
+        .true;
     });
 
     it('Should return false for zero address', async function () {
-      expect(await userManagement.userExists('0x0000000000000000000000000000000000000000')).to.be.false;
+      expect(
+        await userManagement.userExists(
+          '0x0000000000000000000000000000000000000000'
+        )
+      ).to.be.false;
     });
 
     it('Should work correctly with getUserRole for non-existent users', async function () {
-      // For non-existent users, getUserRole should return Unregistered (0) due to Solidity defaults
-      // But userExists should return false
       const nonExistentUser = await doctor.getAddress();
 
       expect(await userManagement.userExists(nonExistentUser)).to.be.false;
-      expect(await userManagement.getUserRole(nonExistentUser)).to.equal(0); // Unregistered role (default)
+      expect(await userManagement.getUserRole(nonExistentUser)).to.equal(0);
 
-      // After registration, both should work correctly
-      await healthcareSystem.connect(admin).registerUser(nonExistentUser, doctorHashedId, 2);
+      // Register as patient first
+      await healthcareSystem
+        .connect(patient)
+        .registerUser(await patient.getAddress(), patientHashedId, 1);
 
-      expect(await userManagement.userExists(nonExistentUser)).to.be.true;
-      expect(await userManagement.getUserRole(nonExistentUser)).to.equal(2); // HealthcareProvider role
+      // Submit role upgrade request from patient to become doctor
+      const admins = [await admin.getAddress()];
+      const encryptedKey = [ethers.toUtf8Bytes('EncryptedKeyExample')];
+      
+      await roleUpgrade.connect(patient).submitUpgradeRequest(
+        await patient.getAddress(),
+        'QmTestCID',
+        2, // HealthcareProvider role
+        admins,
+        encryptedKey
+      );
+
+      // Admin approves the request
+      await roleUpgrade.connect(admin).approveRequest(1, await patient.getAddress());
+
+      expect(await userManagement.userExists(await patient.getAddress())).to.be.true;
+      expect(await userManagement.getUserRole(await patient.getAddress())).to.equal(2);
     });
   });
 
@@ -170,15 +172,29 @@ describe('Healthcare System Contracts', function () {
       await healthcareSystem.connect(patient).registerUser(
         await patient.getAddress(),
         patientHashedId,
-        1 // Patient role
+        1
       );
 
-      // Register doctor
-      await healthcareSystem.connect(admin).registerUser(
+      // Register doctor as patient first, then upgrade to HealthcareProvider
+      await healthcareSystem.connect(doctor).registerUser(
         await doctor.getAddress(),
         doctorHashedId,
-        2 // HealthcareProvider role
+        1
       );
+
+      // Upgrade doctor to HealthcareProvider role
+      const admins = [await admin.getAddress()];
+      const encryptedKey = [ethers.toUtf8Bytes('EncryptedKeyExample')];
+      
+      await roleUpgrade.connect(doctor).submitUpgradeRequest(
+        await doctor.getAddress(),
+        'QmDoctorCID',
+        2,
+        admins,
+        encryptedKey
+      );
+
+      await roleUpgrade.connect(admin).approveRequest(1, await doctor.getAddress());
     });
 
     it('Should allow doctors to add medical records', async function () {
@@ -304,10 +320,27 @@ describe('Healthcare System Contracts', function () {
 
     beforeEach(async function () {
       // Register users
-      await healthcareSystem.connect(patient).registerUser(await patient.getAddress(),patientHashedId,1);
-      // await userManagement.connect(patient).registerUser(await patient.getAddress(), patientHashedId, 1);
-      await healthcareSystem.connect(admin).registerUser(await doctor.getAddress(), doctorHashedId, 2);
+      await healthcareSystem
+        .connect(patient)
+        .registerUser(await patient.getAddress(), patientHashedId, 1);
+      
+      await healthcareSystem
+        .connect(doctor)
+        .registerUser(await doctor.getAddress(), doctorHashedId, 1);
 
+      // Upgrade doctor to HealthcareProvider
+      const admins = [await admin.getAddress()];
+      const encryptedKey = [ethers.toUtf8Bytes('EncryptedKeyExample')];
+      
+      await roleUpgrade.connect(doctor).submitUpgradeRequest(
+        await doctor.getAddress(),
+        'QmDoctorCID',
+        2,
+        admins,
+        encryptedKey
+      );
+
+      await roleUpgrade.connect(admin).approveRequest(1, await doctor.getAddress());
 
       // Add medical record
       await medicalRecords
@@ -358,12 +391,10 @@ describe('Healthcare System Contracts', function () {
     });
 
     it('Should allow patients to revoke access', async function () {
-      // Grant access first
       await accessControl
         .connect(patient)
         .grantAccess(await doctor.getAddress(), recordId);
 
-      // Revoke access
       await accessControl
         .connect(patient)
         .revokeAccess(await doctor.getAddress(), recordId);
@@ -381,7 +412,9 @@ describe('Healthcare System Contracts', function () {
         .connect(patient)
         .grantAccess(await doctor.getAddress(), recordId);
 
-      const grantedPeople = await accessControl.connect(patient).checkWhoHasAccess(recordId);
+      const grantedPeople = await accessControl
+        .connect(patient)
+        .checkWhoHasAccess(recordId);
       expect(grantedPeople).to.include(await doctor.getAddress());
     });
 
@@ -398,17 +431,258 @@ describe('Healthcare System Contracts', function () {
     });
   });
 
+  describe('RoleUpgrade', function () {
+    const cid = 'Qm123abcCIDExample';
+    const encryptedKey = [ethers.toUtf8Bytes('EncryptedKeyExample')];
+
+    beforeEach(async function () {
+      await healthcareSystem.connect(patient).registerUser(
+        await patient.getAddress(),
+        patientHashedId,
+        1
+      );
+    });
+
+    it('Should allow patients to request role upgrade', async function () {
+      const admins = [await admin.getAddress()];
+
+      await expect(
+        roleUpgrade
+          .connect(patient)
+          .submitUpgradeRequest(
+            await patient.getAddress(),
+            cid,
+            2,
+            admins,
+            encryptedKey
+          )
+      )
+        .to.emit(roleUpgrade, 'RoleUpgradeRequested')
+        .withArgs(1, 2, await patient.getAddress(), admins, anyValue);
+    });
+
+    it('Should allow admin to approve upgrade requests', async function () {
+      const admins = [await admin.getAddress()];
+
+      await roleUpgrade.connect(patient).submitUpgradeRequest(
+        await patient.getAddress(),
+        cid,
+        2,
+        admins,
+        encryptedKey
+      );
+
+      await expect(
+        roleUpgrade.connect(admin).approveRequest(1, await patient.getAddress())
+      )
+        .to.emit(roleUpgrade, 'RoleUpgradeApproved')
+        .withArgs(
+          1,
+          await patient.getAddress(),
+          await admin.getAddress(),
+          anyValue
+        );
+
+      const request = await roleUpgrade.requests(1);
+      expect(request.isProcessed).to.be.true;
+      expect(request.isApproved).to.be.true;
+
+      const role = await userManagement.getUserRole(await patient.getAddress());
+      expect(role).to.equal(2);
+    });
+
+    it('Should allow admin to reject upgrade requests', async function () {
+      const admins = [await admin.getAddress()];
+
+      await roleUpgrade.connect(patient).submitUpgradeRequest(
+        await patient.getAddress(),
+        cid,
+        2,
+        admins,
+        encryptedKey
+      );
+
+      await expect(roleUpgrade.connect(admin).rejectRequest(1))
+        .to.emit(roleUpgrade, 'RoleUpgradeRejected')
+        .withArgs(
+          1,
+          await patient.getAddress(),
+          await admin.getAddress(),
+          anyValue
+        );
+
+      const request = await roleUpgrade.requests(1);
+      expect(request.isProcessed).to.be.true;
+      expect(request.isApproved).to.be.false;
+
+      const role = await userManagement.getUserRole(await patient.getAddress());
+      expect(role).to.equal(1);
+    });
+
+    it('Should prevent non-authorized admins from approving', async function () {
+      const admins = [await admin.getAddress()];
+
+      await roleUpgrade
+        .connect(patient)
+        .submitUpgradeRequest(
+          await patient.getAddress(),
+          cid,
+          2,
+          admins,
+          encryptedKey
+        );
+
+      await healthcareSystem
+        .connect(doctor)
+        .registerUser(await doctor.getAddress(), doctorHashedId, 1);
+
+      await expect(
+        roleUpgrade
+          .connect(doctor)
+          .approveRequest(1, await patient.getAddress())
+      ).to.be.revertedWith('Only authorized admin can perform this action');
+    });
+
+    it('Should prevent multiple active requests from same patient', async function () {
+      const admins = [await admin.getAddress()];
+
+      await roleUpgrade
+        .connect(patient)
+        .submitUpgradeRequest(
+          await patient.getAddress(),
+          cid,
+          2,
+          admins,
+          encryptedKey
+        );
+
+      await expect(
+        roleUpgrade
+          .connect(patient)
+          .submitUpgradeRequest(
+            await patient.getAddress(),
+            cid,
+            3,
+            admins,
+            encryptedKey
+          )
+      ).to.be.revertedWith('You have an active request pending');
+    });
+
+    it('Should prevent admins from requesting role upgrade', async function () {
+      const admins = [await admin.getAddress()];
+
+      await expect(
+        roleUpgrade
+          .connect(admin)
+          .submitUpgradeRequest(
+            await admin.getAddress(),
+            'Qm123abcCIDExample',
+            2,
+            admins,
+            encryptedKey
+          )
+      ).to.be.revertedWith('Admin cannot request role upgrade');
+    });
+
+    it('Should return encrypted key for authorized users', async function () {
+      const admins = [await admin.getAddress()];
+
+      await roleUpgrade
+        .connect(patient)
+        .submitUpgradeRequest(
+          await patient.getAddress(),
+          cid,
+          2,
+          admins,
+          encryptedKey
+        );
+
+      const encryptedKeyReturned = await roleUpgrade
+        .connect(admin)
+        .getEncryptedKeyForCaller(1);
+      
+      // Convert both to hex strings for comparison
+      const expectedHex = ethers.hexlify(encryptedKey[0]);
+      expect(encryptedKeyReturned).to.equal(expectedHex);
+    });
+
+    it('Should require non-empty CID', async function () {
+      const admins = [await admin.getAddress()];
+
+      await expect(
+        roleUpgrade.connect(patient).submitUpgradeRequest(
+          await patient.getAddress(),
+          '',
+          2,
+          admins,
+          encryptedKey
+        )
+      ).to.be.revertedWith('CID cannot be empty');
+    });
+
+    it('Should require matching admin and key arrays', async function () {
+      const admins = [await admin.getAddress()];
+      const mismatchedKeys = [
+        ethers.toUtf8Bytes('Key1'),
+        ethers.toUtf8Bytes('Key2'),
+      ];
+
+      await expect(
+        roleUpgrade
+          .connect(patient)
+          .submitUpgradeRequest(
+            await patient.getAddress(),
+            cid,
+            2,
+            admins,
+            mismatchedKeys
+          )
+      ).to.be.revertedWith('Admins and encrypted keys length mismatch');
+    });
+
+    it('Should require user to be registered', async function () {
+      const admins = [await admin.getAddress()];
+
+      await expect(
+        roleUpgrade
+          .connect(insurer)
+          .submitUpgradeRequest(
+            await insurer.getAddress(),
+            cid,
+            2,
+            admins,
+            encryptedKey
+          )
+      ).to.be.revertedWith('User not registered');
+    });
+  });
+
   describe('Integration Tests', function () {
     const recordId = 'LAB_001';
 
     beforeEach(async function () {
-      // Setup complete system
       await healthcareSystem
         .connect(patient)
         .registerUser(await patient.getAddress(), patientHashedId, 1);
+      
       await healthcareSystem
-        .connect(admin)
-        .registerUser(await doctor.getAddress(), doctorHashedId, 2);
+        .connect(doctor)
+        .registerUser(await doctor.getAddress(), doctorHashedId, 1);
+
+      // Upgrade doctor to HealthcareProvider
+      const admins = [await admin.getAddress()];
+      const encryptedKey = [ethers.toUtf8Bytes('EncryptedKeyExample')];
+      
+      await roleUpgrade.connect(doctor).submitUpgradeRequest(
+        await doctor.getAddress(),
+        'QmDoctorCID',
+        2,
+        admins,
+        encryptedKey
+      );
+
+      await roleUpgrade.connect(admin).approveRequest(1, await doctor.getAddress());
 
       await medicalRecords
         .connect(doctor)
@@ -427,12 +701,10 @@ describe('Healthcare System Contracts', function () {
     });
 
     it('Should allow authorized updates to medical records', async function () {
-      // Grant access to doctor
       await accessControl
         .connect(patient)
         .grantAccess(await doctor.getAddress(), recordId);
 
-      // Doctor updates record
       await medicalRecords
         .connect(doctor)
         .updateRecord(
@@ -454,7 +726,6 @@ describe('Healthcare System Contracts', function () {
     });
 
     it('Should prevent unauthorized updates', async function () {
-      // Don't grant access to doctor
       await expect(
         medicalRecords
           .connect(doctor)
@@ -485,11 +756,13 @@ describe('Healthcare System Contracts', function () {
           await accessControl.getAddress()
         );
 
-      const history = await medicalRecords.connect(patient).getRecordHistory(
-        await patient.getAddress(),
-        recordId,
-        await accessControl.getAddress()
-      );
+      const history = await medicalRecords
+        .connect(patient)
+        .getRecordHistory(
+          await patient.getAddress(),
+          recordId,
+          await accessControl.getAddress()
+        );
 
       expect(history.length).to.equal(1);
       expect(history[0].fieldUpdated).to.equal('medicalHistory');
@@ -540,13 +813,27 @@ describe('Healthcare System Contracts', function () {
   describe('Edge Cases and Security', function () {
     it('Should handle empty record ID', async function () {
       const recordId = '';
-      await healthcareSystem
+      await healthcareSystem      //the patient that the new doctor will add record for
         .connect(patient)
         .registerUser(await patient.getAddress(), patientHashedId, 1);
 
       await healthcareSystem
-        .connect(admin)
-        .registerUser(await doctor.getAddress(), doctorHashedId, 2);
+        .connect(doctor)
+        .registerUser(await doctor.getAddress(), doctorHashedId, 1);
+
+      // Upgrade patient to HealthcareProvider
+      const admins = [await admin.getAddress()];
+      const encryptedKey = [ethers.toUtf8Bytes('EncryptedKeyExample')];
+      
+      await roleUpgrade.connect(doctor).submitUpgradeRequest(
+        await doctor.getAddress(),
+        'QmDoctorCID',
+        2,
+        admins,
+        encryptedKey
+      );
+
+      await roleUpgrade.connect(admin).approveRequest(1, await doctor.getAddress());
 
       await expect(
         medicalRecords
@@ -580,11 +867,26 @@ describe('Healthcare System Contracts', function () {
 
     it('Should prevent updates to non-updatable fields', async function () {
       await healthcareSystem
-        .connect(patient)
+        .connect(patient)       
         .registerUser(await patient.getAddress(), patientHashedId, 1);
-      await healthcareSystem
-        .connect(admin)
-        .registerUser(await doctor.getAddress(), doctorHashedId, 2);
+      
+      await healthcareSystem    //register patient as doctor first
+        .connect(doctor)
+        .registerUser(await doctor.getAddress(), doctorHashedId, 1);
+
+      // Upgrade doctor to HealthcareProvider
+      const admins = [await admin.getAddress()];
+      const encryptedKey = [ethers.toUtf8Bytes('EncryptedKeyExample')];
+      
+      await roleUpgrade.connect(doctor).submitUpgradeRequest(
+        await doctor.getAddress(),
+        'QmDoctorCID',
+        2,
+        admins,
+        encryptedKey
+      );
+
+      await roleUpgrade.connect(admin).approveRequest(1, await doctor.getAddress());
 
       const recordId = 'LAB_001';
       await medicalRecords

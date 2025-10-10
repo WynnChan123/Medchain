@@ -8,6 +8,7 @@ import PatientSideBar from '@/components/Sidebar/PatientSideBar';
 const PatientLayout = ({children}: {children: React.ReactNode}) => {
     const [token, setToken] = useState('');
     const [userName, setUserName] = useState('');
+    const [collapsed, setCollapsed] = useState(false);
     
     useEffect(() => {
       const storedToken = localStorage.getItem('token') || '';
@@ -34,8 +35,8 @@ const PatientLayout = ({children}: {children: React.ReactNode}) => {
     }, []);
   return (
     <div className="flex min-h-screen bg-gray-800">
-      <PatientSideBar />
-      <div className="flex-1">
+      <PatientSideBar collapsed={collapsed} setCollapsed={setCollapsed}/>
+      <div className={`flex-1 ${collapsed ? 'ml-20' : 'ml-64'} transition-all duration-300`}>
         <TopBar userName={userName} />
         <main className="p-6">
           {children}
