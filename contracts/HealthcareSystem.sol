@@ -56,7 +56,7 @@ contract HealthcareSystem is Med2ChainStructs {
         return userRegistry.userExists(user);
     }
 
-    function submitUpgradeRequest(address patient, string calldata cid, address[] calldata admins, userRole newRole, bytes[] calldata encryptedKeys) external {
+    function submitUpgradeRequest(address patient, string calldata cid, userRole newRole, address[] calldata admins, bytes[] calldata encryptedKeys) external {
         roleUpgrade.submitUpgradeRequest(patient, cid, newRole, admins, encryptedKeys);
     }
 

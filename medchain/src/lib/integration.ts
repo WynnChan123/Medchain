@@ -72,17 +72,54 @@ export async function getRole(address: string): Promise<UserRole> {
   return roleId as UserRole;
 }
 
-export async function assignRole(address: string, role: number){
-  const contract = await writeContract();
-  const tx = await contract.assignRole(address, role);
-  return await tx.wait();
-}
-
 export async function userExists(address: string): Promise<boolean> {
   const contract = await readContract();
   return await contract.userExists(address);
 }
 
+export async function requestRoleUpgrade(address: string, cid: string, admins: string[], newRole: UserRole, encryptedKeys: string[]){
+  try{
+    const contract = await writeContract();
+    const tx = await contract.submitUpgradeRequest(address, cid, newRole, admins, encryptedKeys);
+    return await tx.wait();
+  }catch(error){
+    console.error("Error requesting role upgrade: ", error);
+    throw error;
+  }
+}
+
+export async function approveUpgrade(requestId: number, userToUpgrade: string){
+  try{
+    const contract = await writeContract();
+    const tx = await contract.approveRequest(requestId, userToUpgrade);
+    return tx.wait();
+  }catch(error){
+    console.error("Failed to approve upgrade request: ", error);
+    throw error;
+  }
+}
+
+export async function rejectRequest(requestId: number){
+  try{
+    const contract = await writeContract();
+    const tx = await contract.rejectRequest(requestId);
+    return tx.wait();
+  }catch(error){
+    console.error("Failed to reject upgrade request: ",error);
+    throw error;
+  }
+}
+
+export async function getEncryptedKey(requestId: number):Promise<string>{
+  try{
+    const contract = await readContract();
+    const key = await contract.getEncryptedKeyForCaller(requestId);
+    return key;
+  }catch(error){
+    console.error("Failed to get encrypted key: ", error);
+    throw error;
+  }
+}
 
 
 
