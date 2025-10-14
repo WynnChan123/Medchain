@@ -6,6 +6,7 @@ import "./Med2Chain.sol";
 contract RoleUpgrade is Med2ChainStructs {
     address public admin;
     uint public requestId;
+    address[] private adminList;
 
     address public userManagementContract;
     address public medicalRecordsContract;
@@ -34,6 +35,9 @@ contract RoleUpgrade is Med2ChainStructs {
     // Map request id to recipient address to encrypted AES key bytes
     mapping(uint => mapping(address => bytes)) public encryptedKeys;
 
+    // Store admin public keys (RSA, base64 encoded)
+    mapping(address => string) public adminPublicKeys;
+
 
     event RoleUpgradeRequested(uint requestId, userRole newRole, address indexed requester, address[] admins, uint256 timestamp);
     event RoleUpgradeApproved(uint requestId, address indexed userToUpgrade, address indexed approver, uint256 timestamp);
@@ -57,6 +61,7 @@ contract RoleUpgrade is Med2ChainStructs {
         requestId = 0;
         userManagementContract = _userManagementContract;
         medicalRecordsContract = _medicalRecordsContract;
+        adminList.push(msg.sender);
     }
 
     function submitUpgradeRequest(address patient, string calldata cid, userRole newRole, address[] calldata admins, bytes[] calldata encryptedKey) external {
@@ -99,6 +104,10 @@ contract RoleUpgrade is Med2ChainStructs {
 
         IUserManagement(userManagementContract).setUserRole(userToUpgrade, request.newRole);
 
+        if(request.newRole == userRole.Admin){
+            adminList.push(userToUpgrade);
+        }
+
         requests[_requestId].isApproved = true;
         requests[_requestId].isProcessed = true;
         requestToApprover[_requestId] = msg.sender;
@@ -120,6 +129,19 @@ contract RoleUpgrade is Med2ChainStructs {
     // Read encrypted key for current caller (so caller can fetch it)
     function getEncryptedKeyForCaller(uint _requestId) external view returns (bytes memory) {
         return encryptedKeys[_requestId][msg.sender];
+    }
+
+    function getAdmins() external view returns (address[] memory){        
+        return adminList;
+    }
+
+    function registerAdminPublicKey(string calldata _publicKey) external {
+        require(bytes(_publicKey).length > 0, "Public key cannot be empty");
+        adminPublicKeys[msg.sender] = _publicKey;
+    }
+
+    function getAdminPublicKey(address _admin) external view returns (string memory){
+        return adminPublicKeys[_admin];
     }
 
 }

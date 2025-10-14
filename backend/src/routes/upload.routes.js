@@ -4,62 +4,66 @@ import fileUpload from "express-fileupload";
 import fetch from "node-fetch";
 import FormData from "form-data";
 
+
 dotenv.config();
 
 const router = express.Router();
 router.use(fileUpload());
+router.use(express.json({ limit: '50mb' })); // For encrypted data
 
 router.post('/uploadToPinata', async(req, res)=> {
-  console.log('Uploading files to IPFS...');
+  console.log('Uploading encrypted data to IPFS...');
   try{
-      const { license, id, proof } = req.files || {};
-      if(!license || !id || !proof){
-        return res.status(400).json({ message: 'All 3 files are required for upload!'});
+      const { encryptedData, metadata } = req.body;
+      
+      if(!encryptedData){
+        return res.status(400).json({ message: 'Encrypted data is required!'});
       }
 
-      async function uploadFileToPinata(file){
-        try{
-          const formData = new FormData();
-          formData.append("file", file.data, file.name);
+      // Upload encrypted blob to Pinata
+      const formData = new FormData();
+      const blob = Buffer.from(encryptedData, 'utf-8');
+      formData.append("file", blob, {
+        filename: `encrypted-role-upgrade-${Date.now()}.txt`,
+        contentType: 'text/plain'
+      });
 
-          const request = await fetch("https://uploads.pinata.cloud/v3/files", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${process.env.PINATA_JWT}`
-            },
-            body: formData,
-          });
-
-          if (!request.ok) {
-            const errText = await request.text();
-            throw new Error(`Pinata upload failed: ${errText}`);
-          }
-
-          const response = await request.json();
-          console.log("Pinata response: ",response);
-          return response;
-        }catch(error){
-          console.log("Failed to upload file to pinata", error);
-          throw error;
-        }
+      // Add metadata if provided
+      if (metadata) {
+        formData.append('pinataMetadata', JSON.stringify({
+          name: `role-upgrade-${metadata.patient || 'unknown'}-${Date.now()}`,
+          keyvalues: metadata
+        }));
       }
 
-      const [licenseRes, idRes, proofRes] = await Promise.all([
-        uploadFileToPinata(license),
-        uploadFileToPinata(id),
-        uploadFileToPinata(proof),
-      ]);
+      const request = await fetch("https://uploads.pinata.cloud/v3/files", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.PINATA_JWT}`,
+          ...formData.getHeaders()
+        },
+        body: formData,
+      });
+
+      if (!request.ok) {
+        const errText = await request.text();
+        throw new Error(`Pinata upload failed: ${errText}`);
+      }
+
+      const response = await request.json();
+      console.log("Pinata response: ", response);
+
+      // Extract CID from response
+      const cid = response.data?.cid;
 
       res.status(200).json({
-        message: "Files uploaded successfully",
-        files: {
-          license: licenseRes,
-          id: idRes,
-          proof: proofRes,
-        },
+        message: "Encrypted data uploaded successfully",
+        cid: cid,
+        pinataResponse: response
       });
+
   }catch(error){
-    console.error("Error in /upload route: ", error);
+    console.error("Error in /uploadToPinata route: ", error);
     return res.status(500).json({ message: 'Error uploading', error: error.message});
   }
 });
