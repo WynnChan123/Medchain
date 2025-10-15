@@ -17,9 +17,11 @@ const config: HardhatUserConfig = {
     },
   },
   etherscan: {
-    apiKey: {
-      sepolia: process.env.ETHERSCAN_API_KEY!,
-    },
+    // Use a single API key instead of network-specific keys
+    apiKey: process.env.ETHERSCAN_API_KEY!,
+  },
+  sourcify: {
+    enabled: false,
   },
 };
 

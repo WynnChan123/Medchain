@@ -17,6 +17,24 @@ export interface User{
   authorizedBy: string;
 }
 
+async function fetchAbiFromEtherscan(address: string): Promise<any> {
+  try {
+    const response = await fetch(`http://localhost:8080/api/etherscan/getABI/${address}`);
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to fetch ABI');
+    }
+
+    const data = await response.json();
+    return data.abi;
+  } catch (error) {
+    console.error("Error fetching ABI from backend:", error);
+    throw error;
+  }
+}
+
+
 export async function writeContract() {
   
   if (!window.ethereum) throw new Error("MetaMask not found");
@@ -25,12 +43,8 @@ export async function writeContract() {
   const provider = new ethers.providers.Web3Provider(window.ethereum);
   const signer = await provider.getSigner();
 
-  const res = await fetch(
-    `https://api-sepolia.etherscan.io/api?module=contract&action=getabi&address=${process.env.NEXT_PUBLIC_SMART_CONTRACT_ADDRESS}&apikey=${process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY}`
-  );
-  const data = await res.json();
-  const abi = JSON.parse(data.result);
 
+  const abi = await fetchAbiFromEtherscan(CONTRACT_ADDRESS);
   return new ethers.Contract(CONTRACT_ADDRESS, abi, signer);
 }
 
@@ -42,13 +56,7 @@ export async function readContract() {
   // const provider = new ethers.providers.JsonRpcProvider(process.env.SEPOLIA_RPC);
     const provider = new ethers.providers.Web3Provider(window.ethereum);
 
-  const res = await fetch(
-    `https://api-sepolia.etherscan.io/api?module=contract&action=getabi&address=${process.env.NEXT_PUBLIC_SMART_CONTRACT_ADDRESS}&apikey=${process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY}`
-  );
-  const data = await res.json();
-  const abi = JSON.parse(data.result);
-  console.log("ABI fetch response:", data);
-
+    const abi = await fetchAbiFromEtherscan(CONTRACT_ADDRESS);
 
   return new ethers.Contract(CONTRACT_ADDRESS, abi, provider);
 }
@@ -58,15 +66,8 @@ export async function readUpgradeContract() {
   await (window.ethereum as any).request({ method: "eth_requestAccounts" });
 
   // const provider = new ethers.providers.JsonRpcProvider(process.env.SEPOLIA_RPC);
-    const provider = new ethers.providers.Web3Provider(window.ethereum);
-
-  const res = await fetch(
-    `https://api-sepolia.etherscan.io/api?module=contract&action=getabi&address=${process.env.NEXT_PUBLIC_ROLE_UPGRADE_ADDRESS}&apikey=${process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY}`
-  );
-  const data = await res.json();
-  const abi = JSON.parse(data.result);
-  console.log("ABI fetch response:", data);
-
+  const provider = new ethers.providers.Web3Provider(window.ethereum);
+  const abi = await fetchAbiFromEtherscan(UPGRADE_ADDRESS);
 
   return new ethers.Contract(UPGRADE_ADDRESS, abi, provider);
 }

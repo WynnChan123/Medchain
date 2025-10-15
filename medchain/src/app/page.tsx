@@ -79,8 +79,19 @@ export default function Login() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: username, password, publicKey }),
       });
-      const data = await response.json();
-
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Login failed:', errorText);
+        throw new Error(errorText);
+      }
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        const text = await response.text();
+        console.error('Non-JSON response:', text);
+        throw new Error(text);
+      }
       if (!window.ethereum) {
         setErrorMessage(
           'Ethereum provider not found. Please install MetaMask.'
