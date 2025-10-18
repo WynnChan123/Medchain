@@ -3,6 +3,7 @@ import express from 'express';
 import fileUpload from "express-fileupload";
 import fetch from "node-fetch";
 import FormData from "form-data";
+import axios from "axios";
 
 
 dotenv.config();
@@ -55,60 +56,68 @@ router.get("/getABI/:address", async (req, res) => {
 
 
 
-router.post('/uploadToPinata', async(req, res)=> {
-  console.log('Uploading encrypted data to IPFS...');
-  try{
-      const { encryptedData, metadata } = req.body;
-      
-      if(!encryptedData){
-        return res.status(400).json({ message: 'Encrypted data is required!'});
-      }
+router.post("/uploadToPinata", async (req, res) => {
+  console.log("Uploading encrypted data to IPFS...");
 
-      // Upload encrypted blob to Pinata
-      const formData = new FormData();
-      const blob = Buffer.from(encryptedData, 'utf-8');
-      formData.append("file", blob, {
-        filename: `encrypted-role-upgrade-${Date.now()}.txt`,
-        contentType: 'text/plain'
-      });
+  try {
+    const { encryptedData, metadata } = req.body;
+    const payloadSize = JSON.stringify(req.body).length;
+    console.log(`Payload size: ${(payloadSize / 1024 / 1024).toFixed(2)} MB`);
 
-      // Add metadata if provided
-      if (metadata) {
-        formData.append('pinataMetadata', JSON.stringify({
-          name: `role-upgrade-${metadata.patient || 'unknown'}-${Date.now()}`,
-          keyvalues: metadata
-        }));
-      }
+    if (!encryptedData) {
+      return res.status(400).json({ message: "Encrypted data is required!" });
+    }
 
-      const request = await fetch("https://uploads.pinata.cloud/v3/files", {
-        method: "POST",
+    // Convert encrypted data to Buffer
+    const blob = Buffer.from(encryptedData, "utf-8");
+
+    // Create FormData payload
+    const formData = new FormData();
+    formData.append("file", blob, {
+      filename: `encrypted-role-upgrade-${Date.now()}.txt`,
+      contentType: "text/plain",
+    });
+
+    // Add optional metadata
+    if (metadata) {
+      formData.append(
+        "pinataMetadata",
+        JSON.stringify({
+          name: `role-upgrade-${metadata.patient || "unknown"}-${Date.now()}`,
+          keyvalues: metadata,
+        })
+      );
+    }
+
+    // Upload via Axios
+    const response = await axios.post(
+      "https://uploads.pinata.cloud/v3/files",
+      formData,
+      {
         headers: {
           Authorization: `Bearer ${process.env.PINATA_JWT}`,
-          ...formData.getHeaders()
+          ...formData.getHeaders(),
         },
-        body: formData,
-      });
-
-      if (!request.ok) {
-        const errText = await request.text();
-        throw new Error(`Pinata upload failed: ${errText}`);
+        maxBodyLength: Infinity, // important for large files
+        maxContentLength: Infinity,
+        timeout: 60000, // 60s timeout
       }
+    );
 
-      const response = await request.json();
-      console.log("Pinata response: ", response);
+    console.log("Pinata response:", response.data);
 
-      // Extract CID from response
-      const cid = response.data?.cid;
-
-      res.status(200).json({
-        message: "Encrypted data uploaded successfully",
-        cid: cid,
-        pinataResponse: response
-      });
-
-  }catch(error){
-    console.error("Error in /uploadToPinata route: ", error);
-    return res.status(500).json({ message: 'Error uploading', error: error.message});
+    const cid = response.data?.data?.cid;
+    res.status(200).json({
+      message: "Encrypted data uploaded successfully",
+      cid,
+      pinataResponse: response.data,
+    });
+  } catch (error) {
+    console.error("Error in /uploadToPinata route:", error);
+    return res.status(500).json({
+      message: "Error uploading",
+      error: error.message,
+    });
   }
 });
 

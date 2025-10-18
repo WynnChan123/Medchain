@@ -1,9 +1,15 @@
 import { X } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import FileUploadField from './FileUploadField';
-import { getAdminPublicKey, getAdmins, requestRoleUpgrade, submitRoleUpgradeRequest } from '@/lib/integration';
+import {
+  getAdminPublicKey,
+  getAdmins,
+  requestRoleUpgrade,
+  submitRoleUpgradeRequest,
+} from '@/lib/integration';
 import { ethers } from 'ethers';
 import { print } from '../../utils/toast';
+import { ToastContainer, toast } from 'react-toastify';
 
 interface RoleUpgradeModalProps {
   isOpen: boolean;
@@ -30,7 +36,7 @@ const RoleUpgradeModal: React.FC<RoleUpgradeModalProps> = ({
   const [additionalInfo, setAdditionalInfo] = useState('');
   const [organization, setOrganization] = useState('');
   const [admins, setAdmins] = useState<string[]>([]);
-  const [selectedAdmin, setSelectedAdmin] =  useState<string[]>([]);
+  const [selectedAdmin, setSelectedAdmin] = useState<string[]>([]);
   const [address, setAddress] = useState<string>('');
 
   useEffect(() => {
@@ -43,22 +49,24 @@ const RoleUpgradeModal: React.FC<RoleUpgradeModalProps> = ({
   }, [isOpen]);
 
   useEffect(() => {
-  if (isOpen) {
-    getAdmins()
-      .then(setAdmins)
-      .catch((err) => console.error('Failed to fetch admins', err));
-  }
-}, [isOpen]);
+    if (isOpen) {
+      getAdmins()
+        .then(setAdmins)
+        .catch((err) => console.error('Failed to fetch admins', err));
+    }
+  }, [isOpen]);
 
-  useEffect(()=>{
-      const admins = getAdmins();
-    console.log("Admins from contract:", admins);
-  },[]);
+  useEffect(() => {
+    const admins = getAdmins();
+    console.log('Admins from contract:', admins);
+  }, []);
 
   useEffect(() => {
     const fetchAddress = async () => {
       if (typeof window.ethereum !== 'undefined') {
-        const provider = new ethers.providers.Web3Provider(window.ethereum as ethers.providers.ExternalProvider);        
+        const provider = new ethers.providers.Web3Provider(
+          window.ethereum as ethers.providers.ExternalProvider
+        );
         const signer = await provider.getSigner();
         const userAddress = await signer.getAddress();
         setAddress(userAddress);
@@ -67,37 +75,64 @@ const RoleUpgradeModal: React.FC<RoleUpgradeModalProps> = ({
     if (isOpen) fetchAddress();
   }, [isOpen]);
 
-  const handleSubmit = async() => {
-    try{
-      if(!selectedRole){
-        alert('Please ensure a role is selected');
+  const handleSubmit = async () => {
+    try {
+      if (!selectedRole) {
+        print('Please ensure a role is selected', 'warning', ()=> {});
         return;
-      }else if (selectedAdmin.length === 0){
-        alert('Please select an admin');
-      }else if (!files.id || !files.license || !files.proof){
-        alert('Please ensure all files are attached');
-        return
-      }else{
-        const adminPublicKeys = await Promise.all(selectedAdmin.map(async (addr) => await getAdminPublicKey(addr)) );
+      } else if (selectedAdmin.length === 0) {
+        print('Please select an admin', 'warning', ()=> {});
+        return;
+      } else if (!files.id || !files.license || !files.proof) {
+        print('Please ensure all files are attached', 'warning', ()=> {});
+        return;
+      } else {
+        console.log('No error so far');
+        console.log(selectedRole); //admin logged
+        console.log(typeof files.id); //object logged
+        console.log(typeof organization); //string logged
+        console.log(typeof selectedAdmin); //object logged
+        const adminPublicKeys = await Promise.all(
+          selectedAdmin.map(async (addr) => await getAdminPublicKey(addr))
+        );
+        console.log(typeof adminPublicKeys); //object logged
+        console.log(adminPublicKeys);
+
         await submitRoleUpgradeRequest(
-          address, 
-          { id: files.id, license: files.license, proof: files.proof},
-          { role: selectedRole, organization: organization, additionalInfo: additionalInfo},
+          address,
+          { id: files.id, license: files.license, proof: files.proof },
+          {
+            role: selectedRole,
+            organization: organization,
+            additionalInfo: additionalInfo,
+          },
           selectedAdmin,
           adminPublicKeys
         );
-        print('You successfully requested for a role upgrade!','success', ()=> onClose());
-
+        print('You successfully requested for a role upgrade!', 'success', () =>
+          onClose()
+        );
       }
-    }catch(err){
-      console.error("Error submitting request: ", err);
+    } catch (err: any) {
+      console.error('Error submitting request: ', err);
+
+      // Clean up the error message
+      let errorMessage = 'Failed to submit request';
+
+      if (err.reason) {
+        errorMessage = err.reason.replace('execution reverted: ', '');
+        print(errorMessage, 'error', () => {});
+
+        console.log('Error message:', errorMessage);
+      }
     }
-  }
+  };
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 h-full">
+      <ToastContainer />
       <div className="bg-gray-900 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-700">
         <div className="sticky top-0 bg-gray-900 border-b border-gray-700 p-6 flex justify-between items-center">
           <h2 className="text-white text-xl font-semibold">
@@ -196,21 +231,28 @@ const RoleUpgradeModal: React.FC<RoleUpgradeModalProps> = ({
           </div>
 
           <div>
-            <label className="text-white mb-2 block">Select Admin Reviewers:</label>
+            <label className="text-white mb-2 block">
+              Select Admin Reviewers:
+            </label>
             <div className="space-y-2">
               {admins.length === 0 ? (
                 <p className="text-gray-400">No admins available.</p>
               ) : (
                 admins.map((adminAddr) => (
-                  <label key={adminAddr} className="flex items-center gap-2 text-white">
+                  <label
+                    key={adminAddr}
+                    className="flex items-center gap-2 text-white"
+                  >
                     <input
                       type="checkbox"
                       value={adminAddr}
                       checked={selectedAdmin.includes(adminAddr)}
                       onChange={(e) => {
                         const { checked, value } = e.target;
-                        setSelectedAdmin((prev:any) =>
-                          checked ? [...prev, value] : prev.filter((a:any) => a !== value)
+                        setSelectedAdmin((prev: any) =>
+                          checked
+                            ? [...prev, value]
+                            : prev.filter((a: any) => a !== value)
                         );
                       }}
                     />

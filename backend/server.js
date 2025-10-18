@@ -20,10 +20,9 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Parse requests of content-type - application/json
-app.use(express.json());
-
-// Parse requests of content-type - application/x-www-form-urlencoded
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ limit: '100mb', extended: true }));
+// // Parse requests of content-type - application/x-www-form-urlencoded
 
 // Simple route
 app.get('/', (req, res) => {
