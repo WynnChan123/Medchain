@@ -670,7 +670,6 @@ describe('Healthcare System Contracts', function () {
       ).to.be.revertedWith('User not registered');
     });
 
-
     it('Should allow an admin to register a public key', async function () {
       const encryptedKey = [ethers.toUtf8Bytes('EncryptedKeyExample')];
       const admins = [await admin.getAddress()];
@@ -719,6 +718,369 @@ describe('Healthcare System Contracts', function () {
       expect(await roleUpgrade.getAdminPublicKey(admin1)).to.equal(key1);
       expect(await roleUpgrade.getAdminPublicKey(admin2)).to.equal(key2);
     });
+
+    it('Should return the pending requests for a user(patient)', async function () {
+      const admins = [await admin.getAddress()];
+
+      //patient submits upgrade role request to admin(s)
+      await roleUpgrade
+        .connect(patient)
+        .submitUpgradeRequest(
+          await patient.getAddress(),
+          cid,
+          2,
+          admins,
+          encryptedKey
+        );
+
+      const pendingRequests = await roleUpgrade
+        .connect(patient)
+        .getPendingRequestByUser(await patient.getAddress());
+
+      expect(pendingRequests.length).to.equal(1);
+      expect(pendingRequests[0].requestId).to.equal(1);
+      expect(pendingRequests[0].newRole).to.equal(2);
+      expect(pendingRequests[0].requester).to.equal(await patient.getAddress());
+      expect(pendingRequests[0].isProcessed).to.be.false;
+      expect(pendingRequests[0].isApproved).to.be.false;
+      expect(pendingRequests[0].cid).to.equal(cid);
+    });
+
+    it('Should return multiple pending requests for admin', async function () {
+      const admins = [await admin.getAddress()];
+
+      // Register doctor as patient
+      await healthcareSystem
+        .connect(doctor)
+        .registerUser(await doctor.getAddress(), doctorHashedId, 1);
+
+      // Patient submits request
+      await roleUpgrade
+        .connect(patient)
+        .submitUpgradeRequest(
+          await patient.getAddress(),
+          cid,
+          2,
+          admins,
+          encryptedKey
+        );
+
+      // Doctor submits request
+      await roleUpgrade
+        .connect(doctor)
+        .submitUpgradeRequest(
+          await doctor.getAddress(),
+          'QmDoctorCID',
+          2,
+          admins,
+          encryptedKey
+        );
+
+      // Get pending requests for admin
+      const pendingRequests = await roleUpgrade.getPendingRequestsByAdmin(
+        await admin.getAddress()
+      );
+
+      expect(pendingRequests.length).to.equal(2);
+      expect(pendingRequests[0].requestId).to.equal(1);
+      expect(pendingRequests[1].requestId).to.equal(2);
+    });
+
+    it('Should not return processed requests for admin', async function () {
+      const admins = [await admin.getAddress()];
+
+      // Submit request
+      await roleUpgrade
+        .connect(patient)
+        .submitUpgradeRequest(
+          await patient.getAddress(),
+          cid,
+          2,
+          admins,
+          encryptedKey
+        );
+
+      // Admin approves
+      await roleUpgrade
+        .connect(admin)
+        .approveRequest(1, await patient.getAddress());
+
+      // Check pending (should be empty)
+      const pendingRequests = await roleUpgrade.getPendingRequestsByAdmin(
+        await admin.getAddress()
+      );
+
+      expect(pendingRequests.length).to.equal(0);
+    });
+
+    it('Should return pending requests for admin', async function () {
+      const admins = [await admin.getAddress()];
+
+      // Patient submits upgrade request
+      await roleUpgrade
+        .connect(patient)
+        .submitUpgradeRequest(
+          await patient.getAddress(),
+          cid,
+          2,
+          admins,
+          encryptedKey
+        );
+
+      // Get pending requests for admin
+      const pendingRequests = await roleUpgrade.getPendingRequestsByAdmin(
+        await admin.getAddress()
+      );
+
+      expect(pendingRequests.length).to.equal(1);
+      expect(pendingRequests[0].requestId).to.equal(1);
+      expect(pendingRequests[0].requester).to.equal(await patient.getAddress());
+      expect(pendingRequests[0].isProcessed).to.be.false;
+    });
+
+    it('Should return multiple pending requests for admin', async function () {
+      const admins = [await admin.getAddress()];
+
+      // Register doctor as patient
+      await healthcareSystem
+        .connect(doctor)
+        .registerUser(await doctor.getAddress(), doctorHashedId, 1);
+
+      // Patient submits request
+      await roleUpgrade
+        .connect(patient)
+        .submitUpgradeRequest(
+          await patient.getAddress(),
+          cid,
+          2,
+          admins,
+          encryptedKey
+        );
+
+      // Doctor submits request
+      await roleUpgrade
+        .connect(doctor)
+        .submitUpgradeRequest(
+          await doctor.getAddress(),
+          'QmDoctorCID',
+          2,
+          admins,
+          encryptedKey
+        );
+
+      // Get pending requests for admin
+      const pendingRequests = await roleUpgrade.getPendingRequestsByAdmin(
+        await admin.getAddress()
+      );
+
+      expect(pendingRequests.length).to.equal(2);
+      expect(pendingRequests[0].requestId).to.equal(1);
+      expect(pendingRequests[1].requestId).to.equal(2);
+    });
+
+    it('Should not return processed requests for admin', async function () {
+      const admins = [await admin.getAddress()];
+
+      // Submit request
+      await roleUpgrade
+        .connect(patient)
+        .submitUpgradeRequest(
+          await patient.getAddress(),
+          cid,
+          2,
+          admins,
+          encryptedKey
+        );
+
+      // Admin approves
+      await roleUpgrade
+        .connect(admin)
+        .approveRequest(1, await patient.getAddress());
+
+      // Check pending (should be empty)
+      const pendingRequests = await roleUpgrade.getPendingRequestsByAdmin(
+        await admin.getAddress()
+      );
+
+      expect(pendingRequests.length).to.equal(0);
+    });
+
+    it('Should return acknowledged requests for admin', async function () {
+      const admins = [await admin.getAddress()];
+
+      // Submit request
+      await roleUpgrade
+        .connect(patient)
+        .submitUpgradeRequest(
+          await patient.getAddress(),
+          cid,
+          2,
+          admins,
+          encryptedKey
+        );
+
+      // Admin approves
+      await roleUpgrade
+        .connect(admin)
+        .approveRequest(1, await patient.getAddress());
+
+      // Get acknowledged requests
+      const acknowledgedRequests =
+        await roleUpgrade.getAcknowledgedRequestsByAdmin(
+          await admin.getAddress()
+        );
+
+      expect(acknowledgedRequests.length).to.equal(1);
+      expect(acknowledgedRequests[0].requestId).to.equal(1);
+      expect(acknowledgedRequests[0].isProcessed).to.be.true;
+      expect(acknowledgedRequests[0].isApproved).to.be.true;
+    });
+
+    it('Should return both approved and rejected requests', async function () {
+      const admins = [await admin.getAddress()];
+
+      // Register doctor
+      await healthcareSystem
+        .connect(doctor)
+        .registerUser(await doctor.getAddress(), doctorHashedId, 1);
+
+      // Patient submits request
+      await roleUpgrade
+        .connect(patient)
+        .submitUpgradeRequest(
+          await patient.getAddress(),
+          cid,
+          2,
+          admins,
+          encryptedKey
+        );
+
+      // Doctor submits request
+      await roleUpgrade
+        .connect(doctor)
+        .submitUpgradeRequest(
+          await doctor.getAddress(),
+          'QmDoctorCID',
+          2,
+          admins,
+          encryptedKey
+        );
+
+      // Admin approves patient's request
+      await roleUpgrade
+        .connect(admin)
+        .approveRequest(1, await patient.getAddress());
+
+      // Admin rejects doctor's request
+      await roleUpgrade.connect(admin).rejectRequest(2);
+
+      // Get acknowledged requests
+      const acknowledgedRequests =
+        await roleUpgrade.getAcknowledgedRequestsByAdmin(
+          await admin.getAddress()
+        );
+
+      expect(acknowledgedRequests.length).to.equal(2);
+      expect(acknowledgedRequests[0].isApproved).to.be.true;
+      expect(acknowledgedRequests[1].isApproved).to.be.false;
+    });
+
+     describe('getRequestAdminAddresses', function () {
+    it('Should return the admin addresses for a request', async function () {
+      const admins = [await admin.getAddress()];
+
+      await roleUpgrade
+        .connect(patient)
+        .submitUpgradeRequest(
+          await patient.getAddress(),
+          cid,
+          2,
+          admins,
+          encryptedKey
+        );
+
+      const requestAdmins = await roleUpgrade.getRequestAdminAddresses(1);
+
+      expect(requestAdmins.length).to.equal(1);
+      expect(requestAdmins[0]).to.equal(await admin.getAddress());
+    });
+
+    it('Should return multiple admin addresses for a request', async function () {
+      await healthcareSystem
+        .connect(doctor)
+        .registerUser(await doctor.getAddress(), doctorHashedId, 1);
+
+      const initialAdmins = [await admin.getAddress()];
+      const initialEncryptedKey = [ethers.toUtf8Bytes('Key')];
+      
+      await roleUpgrade
+        .connect(doctor)
+        .submitUpgradeRequest(
+          await doctor.getAddress(),
+          'QmDoctorAdminCID',
+          4,
+          initialAdmins,
+          initialEncryptedKey
+        );
+
+      await roleUpgrade
+        .connect(admin)
+        .approveRequest(1, await doctor.getAddress());
+
+      const multipleAdmins = [
+        await admin.getAddress(),
+        await doctor.getAddress()
+      ];
+      const multipleKeys = [
+        ethers.toUtf8Bytes('Key1'),
+        ethers.toUtf8Bytes('Key2')
+      ];
+
+      await roleUpgrade
+        .connect(patient)
+        .submitUpgradeRequest(
+          await patient.getAddress(),
+          cid,
+          2,
+          multipleAdmins,
+          multipleKeys
+        );
+
+      const requestAdmins = await roleUpgrade.getRequestAdminAddresses(2);
+
+      expect(requestAdmins.length).to.equal(2);
+      expect(requestAdmins).to.include(await admin.getAddress());
+      expect(requestAdmins).to.include(await doctor.getAddress());
+    });
+
+    it('Should return empty array for non-existent request', async function () {
+      const requestAdmins = await roleUpgrade.getRequestAdminAddresses(999);
+      expect(requestAdmins.length).to.equal(0);
+    });
+
+    it('Should maintain admin addresses after request is processed', async function () {
+      const admins = [await admin.getAddress()];
+
+      await roleUpgrade
+        .connect(patient)
+        .submitUpgradeRequest(
+          await patient.getAddress(),
+          cid,
+          2,
+          admins,
+          encryptedKey
+        );
+
+      await roleUpgrade
+        .connect(admin)
+        .approveRequest(1, await patient.getAddress());
+
+      const requestAdmins = await roleUpgrade.getRequestAdminAddresses(1);
+
+      expect(requestAdmins.length).to.equal(1);
+      expect(requestAdmins[0]).to.equal(await admin.getAddress());
+    });
+  });
   });
 
   describe('Integration Tests', function () {

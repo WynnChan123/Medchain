@@ -2,13 +2,26 @@
 import useStore from "@/store/userStore";
 import { Bell, User2 } from 'lucide-react';
 import { useEffect, useRef, useState } from "react";
-import { getRole } from '@/lib/integration';
+import { getPendingRequestByUser, getRole } from '@/lib/integration';
+import { ethers } from "ethers";
+import { UserRole } from "../../utils/userRole";
+
+  interface RoleUpgradeRequest {
+    requestId: number;
+    newRole: UserRole;
+    isProcessed: boolean;
+    isApproved: boolean;
+    adminAddresses: string[];
+    requester: string;
+    timestamp: number;
+    cid: string;
+  }
 
 const TopBar = ({userName}:{userName:string})=>{
   const role = useStore((state) => state.role);
   const [hydrated, setHydrated] = useState(false);  
   const [showDropdown, setShowDropdown] = useState(false);
-  const [notification, setNotication] = useState([]);
+  const [notification, setNotication] = useState<RoleUpgradeRequest[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -32,6 +45,35 @@ const TopBar = ({userName}:{userName:string})=>{
       document.removeEventListener("mousedown", handleClickOutside);
     }
   },[]);
+
+  useEffect(()=> {
+    const fetchNotification = async() =>{
+      if(!window.ethereum){
+      return;
+    }
+      const provider = new ethers.providers.Web3Provider(
+        window.ethereum as ethers.providers.ExternalProvider
+      );
+      await provider.send('eth_requestAccounts', []);
+      const signer = provider.getSigner();
+      const userAddress = await signer.getAddress();
+      const userRole = await getRole(userAddress);
+
+      if(userRole == UserRole.Patient){
+        const pending = await getPendingRequestByUser(userAddress);
+        const formatted = pending.map((req: any) => ({
+          ...req,
+          requestId: Number(req.requestId),
+          newRole: UserRole[req.newRole],
+          timestamp: Number(req.timestamp),
+        }));
+        setNotication(formatted);
+      }
+    }
+
+    fetchNotification();
+  },[]);
+
 
   return(
     <div className="bg-blue-950 w-full flex justify-between items-center px-6 py-4 shadow-sm">
@@ -57,10 +99,10 @@ const TopBar = ({userName}:{userName:string})=>{
                     className="p-4 border-b border-gray-800 text-white text-sm"
                   >
                     <p>
-                      <strong>Request ID:</strong> {""}
+                      <strong>Request ID: </strong> {req.requestId}
                     </p>
                     <p>
-                      <strong>Role:</strong>{" "}
+                      <strong>Requested Role: </strong>{req.newRole}
                     </p>
                     <p className="text-yellow-400 font-medium">
                       Status: Pending

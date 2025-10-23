@@ -1,66 +1,464 @@
 'use client';
 
-import Button from '@/components/Button';
-import OrganizationTable from '@/components/OrganizationTable';
-import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { getAdminPublicKey, getRole } from '@/lib/integration';
-import { ethers } from 'ethers';
+import React, { useState, useEffect } from 'react';
+import { Users, Clock, CheckCircle, XCircle, FileText, ChevronDown, Eye } from 'lucide-react';
+import { BigNumber, ethers } from 'ethers';
+import { getRole, getAdminPublicKey, getPendingRequestsByAdmin, getAcknowledgedRequestsByAdmin, approveUpgrade, rejectRequest } from '@/lib/integration';
 import { UserRole } from '../../../utils/userRole';
 import { generateAndRegisterAdminKey } from '@/lib/adminKeys';
+import DocumentViewerModal from '@/components/DocumentViewerModal';
+
+interface RoleUpgradeRequest {
+  requestId: BigNumber;
+  newRole: UserRole;
+  isProcessed: boolean;
+  isApproved: boolean;
+  adminAddresses: string[];
+  requester: string;
+  timestamp: BigNumber;
+  cid: string;
+}
+
+interface User {
+  address: string;
+  currentRole: string;
+  status: 'Active' | 'Inactive';
+}
 
 const Dashboard = () => {
-
+  const [walletAddress, setWalletAddress] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState('All Roles');
+  const [pendingRequests, setPendingRequests] = useState<RoleUpgradeRequest[]>([]);
+  const [processedRequests, setProcessedRequests] = useState<RoleUpgradeRequest[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(false);
   const [hasPublicKey, setHasPublicKey] = useState<boolean>(false);
+  
+  // Document Viewer Modal State
+  const [viewModalOpen, setViewModalOpen] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState<RoleUpgradeRequest | null>(null);
 
-  useEffect(()=> {
-    const init= async() => {
-      if(!window.ethereum){
-        return;
-      }
+  useEffect(() => {
+    const init = async () => {
+      if (!window.ethereum) return;
+      
       const provider = new ethers.providers.Web3Provider(window.ethereum);
       const signer = provider.getSigner();
       const userAddress = await signer.getAddress();
       const userRole = await getRole(userAddress);
 
-      if(userRole == UserRole.Admin){
+      // Check and generate admin public key
+      if (userRole == UserRole.Admin) {
+        // try{
+        //   console.log('Forcing key regeneration for NodeRSA compatibility...');
+        //   localStorage.removeItem('adminPrivateKey'); // Clear old key
+          
+        //   const publicKey = await generateAndRegisterAdminKey();
+        //   console.log('New NodeRSA keys generated and registered');
+        //   setHasPublicKey(true);
+        // }catch(error){
+        //   console.error('Error with admin key', error);
+        //   setHasPublicKey(false);
+        // }
         const publicKey = await getAdminPublicKey(userAddress);
-        if(!publicKey){
+        if (!publicKey) {
           console.log('No public key generated has been generated for admin, creating one...');
           await generateAndRegisterAdminKey();
           console.log('Generated a public key for admin');
-        }else{
+          setHasPublicKey(true);
+        } else {
           const trimKey = publicKey.trim();
-          if(trimKey.startsWith('-----BEGIN PUBLIC KEY-----')){
+          if (trimKey.startsWith('-----BEGIN PUBLIC KEY-----')) {
             console.log('Admin already has an existing public key');
             setHasPublicKey(true);
-          }else{
+          } else {
             console.log('Converting key to PEM format');
             await generateAndRegisterAdminKey();
             setHasPublicKey(true);
           }
         }
       }
-    }
+
+      setWalletAddress(userAddress);
+
+      // Fetch pending and processed requests
+      await fetchRequests(userAddress);
+      await fetchUsers();
+    };
 
     init();
-  },[]);
+  }, []);
 
+  const fetchRequests = async (adminAddress: string) => {
+    try {
+      setLoading(true);
+      const pending = await getPendingRequestsByAdmin(adminAddress);
+      const processed = await getAcknowledgedRequestsByAdmin(adminAddress);
 
-  const router = useRouter();
+      setPendingRequests(pending);
+      setProcessedRequests(processed);
+    } catch (error) {
+      console.error('Error fetching requests:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      // Mock data for now
+      const mockUsers: User[] = [
+        { address: '0x123...abc', currentRole: 'Patient', status: 'Active' },
+        { address: '0x456...def', currentRole: 'Healthcare Provider', status: 'Active' },
+        { address: '0x789...ghi', currentRole: 'Insurance Provider', status: 'Active' },
+        { address: '0xabc...123', currentRole: 'Admin', status: 'Active' },
+      ];
+
+      setUsers(mockUsers);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
+  const handleViewDocuments = (request: RoleUpgradeRequest) => {
+    setSelectedRequest(request);
+    setViewModalOpen(true);
+  };
+
+  const handleApprove = async (requestId: number, userAddress: string) => {
+    try {
+      console.log('Approving request:', requestId, userAddress);
+      await approveUpgrade(requestId, userAddress);
+      
+      // Show success message
+      alert('Request approved successfully!');
+      
+      // Refresh data
+      await fetchRequests(walletAddress);
+    } catch (error: any) {
+      console.error('Error approving request:', error);
+      alert(`Failed to approve request: ${error.message}`);
+    }
+  };
+
+  const handleReject = async (requestId: number) => {
+    try {
+      console.log('Rejecting request:', requestId);
+      await rejectRequest(requestId);
+      
+      // Show success message
+      alert('Request rejected successfully!');
+      
+      // Refresh data
+      await fetchRequests(walletAddress);
+    } catch (error: any) {
+      console.error('Error rejecting request:', error);
+      alert(`Failed to reject request: ${error.message}`);
+    }
+  };
+
+  const getRoleColor = (role: UserRole | string) => {
+    if (typeof role === 'string') {
+      // Handle string roles from mock data
+      const roleMap: Record<string, string> = {
+        'Patient': 'text-gray-300',
+        'Healthcare Provider': 'text-green-400',
+        'Insurance Provider': 'text-blue-400',
+        'Admin': 'text-purple-400'
+      };
+      return roleMap[role] || 'text-gray-400';
+    }
+    
+    // Handle UserRole enum
+    const colors: Record<UserRole, string> = {
+      [UserRole.Unregistered]: 'text-gray-400',
+      [UserRole.Patient]: 'text-gray-300',
+      [UserRole.HealthcareProvider]: 'text-green-400',
+      [UserRole.Insurer]: 'text-blue-400',
+      [UserRole.Admin]: 'text-purple-400'
+    };
+    return colors[role] || 'text-gray-400';
+  };
+
+  const filteredUsers = users.filter(user => {
+    const matchesSearch = user.address.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesRole = roleFilter === 'All Roles' || user.currentRole === roleFilter;
+    return matchesSearch && matchesRole;
+  });
+
   return (
-    <div>
-      <div className="w-full h-[420px] bg-white rounded-lg overflow-x-auto text-xs shadow p-6 flex-1 overflow-y-hidden">
-        <div className="flex justify-end">
-          <button
-            className="flex justify-items-end bg-gray-500 text-white rounded-lg px-4 py-2"
-            onClick={() => router.push('/Admin/Organization')}
-          >
-            View All
-          </button>
+    <div className="space-y-6">
+      {/* Welcome Card */}
+      <div className="bg-gradient-to-r from-blue-900 to-blue-800 rounded-lg p-6 shadow-lg border border-blue-700">
+        <h2 className="text-white text-xl font-semibold mb-2">
+          Admin Dashboard
+        </h2>
+        <p className="text-white mb-2">
+          Wallet: {walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : 'Connecting...'}
+        </p>
+        <div className="flex gap-4 text-sm">
+          <div className="bg-blue-600 px-4 py-2 rounded-lg">
+            <p className="text-white">Pending Reviews</p>
+            <p className="text-white font-bold text-lg">{pendingRequests.length}</p>
+          </div>
+          <div className="bg-blue-600 px-4 py-2 rounded-lg">
+            <p className="text-white">Total Users</p>
+            <p className="text-white font-bold text-lg">{users.length}</p>
+          </div>
+          <div className="bg-blue-600 px-4 py-2 rounded-lg">
+            <p className="text-white">Public Key</p>
+            <p className="text-white font-bold text-lg">{hasPublicKey ? '✅' : '⏳'}</p>
+          </div>
         </div>
-        <OrganizationTable itemsPerPage={3} />
       </div>
+
+      {/* Pending Review Requests Table */}
+      <div className="bg-gray-900 rounded-lg p-6 border border-gray-700">
+        <div className="flex items-center gap-3 mb-4">
+          <Clock className="text-yellow-400" size={24} />
+          <h3 className="text-white text-lg font-semibold">
+            Pending Review Requests
+          </h3>
+          <span className="bg-yellow-900/30 text-yellow-400 px-3 py-1 rounded-full text-sm font-medium">
+            {pendingRequests.length}
+          </span>
+        </div>
+
+        {loading ? (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mx-auto"></div>
+            <p className="text-gray-400 text-sm mt-2">Loading requests...</p>
+          </div>
+        ) : pendingRequests.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-700">
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">Request ID</th>
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">Requester</th>
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">Requested Role</th>
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">Submitted</th>
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">Documents</th>
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingRequests.map((request) => (
+                  <tr key={request.requestId.toNumber()} className="border-b border-gray-800 hover:bg-gray-800">
+                    <td className="text-blue-400 py-3 px-4 text-sm font-mono">
+                      #{Number(request.requestId)}
+                    </td>
+                    <td className="text-white py-3 px-4 text-sm font-mono">
+                      {request.requester?.slice(0, 6)}...{request.requester?.slice(-4)}
+                    </td>
+                    <td className={`py-3 px-4 text-sm font-semibold ${getRoleColor(request.newRole)}`}>
+                      {UserRole[request.newRole]}
+                    </td>
+                    <td className="text-gray-300 py-3 px-4 text-sm">
+                      {new Date(request.timestamp.toNumber() * 1000).toLocaleString()}
+                    </td>
+                    <td className="py-3 px-4">
+                      <button 
+                        onClick={() => handleViewDocuments(request)}
+                        className="flex items-center gap-1 text-purple-400 hover:text-purple-300 text-sm transition"
+                      >
+                        <Eye size={16} />
+                        View
+                      </button>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleApprove(request.requestId.toNumber(), request.requester)}
+                          className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm flex items-center gap-1 transition"
+                        >
+                          <CheckCircle size={14} />
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => handleReject(request.requestId.toNumber())}
+                          className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm flex items-center gap-1 transition"
+                        >
+                          <XCircle size={14} />
+                          Reject
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-400">
+            <Clock size={48} className="mx-auto mb-3 opacity-50" />
+            <p>No pending requests</p>
+          </div>
+        )}
+      </div>
+
+      {/* Processed Requests Table */}
+      <div className="bg-gray-900 rounded-lg p-6 border border-gray-700">
+        <div className="flex items-center gap-3 mb-4">
+          <CheckCircle className="text-blue-400" size={24} />
+          <h3 className="text-white text-lg font-semibold">
+            Processed Requests
+          </h3>
+        </div>
+
+        {processedRequests.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-700">
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">Request ID</th>
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">Requester</th>
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">Role</th>
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">Status</th>
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">Reviewed</th>
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">Documents</th>
+                </tr>
+              </thead>
+              <tbody>
+                {processedRequests.map((request) => (
+                  <tr key={request.requestId.toNumber()} className="border-b border-gray-800 hover:bg-gray-800">
+                    <td className="text-blue-400 py-3 px-4 text-sm font-mono">
+                      #{Number(request.requestId)}
+                    </td>
+                    <td className="text-white py-3 px-4 text-sm font-mono">
+                      {request.requester?.slice(0, 6)}...{request.requester?.slice(-4)}
+                    </td>
+                    <td className={`py-3 px-4 text-sm font-semibold ${getRoleColor(request.newRole)}`}>
+                      {UserRole[request.newRole]}
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        request.isApproved === true 
+                          ? 'bg-green-900/30 text-green-400 border border-green-700'
+                          : 'bg-red-900/30 text-red-400 border border-red-700'
+                      }`}>
+                        {request.isApproved === true ? (
+                          <span className="flex items-center gap-1">
+                            <CheckCircle size={12} />
+                            Approved
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1">
+                            <XCircle size={12} />
+                            Rejected
+                          </span>
+                        )}
+                      </span>
+                    </td>
+                    <td className="text-gray-300 py-3 px-4 text-sm">
+                      {new Date(request.timestamp.toNumber() * 1000).toLocaleString()}
+                    </td>
+                    <td className="py-3 px-4">
+                      <button 
+                        onClick={() => handleViewDocuments(request)}
+                        className="flex items-center gap-1 text-purple-400 hover:text-purple-300 text-sm transition"
+                      >
+                        <Eye size={16} />
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-400">
+            <FileText size={48} className="mx-auto mb-3 opacity-50" />
+            <p>No processed requests yet</p>
+          </div>
+        )}
+      </div>
+
+      {/* User Management Table */}
+      <div className="bg-gray-900 rounded-lg p-6 border border-gray-700">
+        <div className="flex justify-between items-center mb-4">
+          <div className="flex items-center gap-3">
+            <Users className="text-blue-400" size={24} />
+            <h3 className="text-white text-lg font-semibold">User Management</h3>
+          </div>
+        </div>
+
+        {/* Search and Filter */}
+        <div className="flex gap-4 mb-4">
+          <input
+            type="text"
+            placeholder="Search by address..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600"
+          />
+          <div className="relative">
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              className="appearance-none px-4 py-2 pr-10 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+            >
+              <option>All Roles</option>
+              <option>Patient</option>
+              <option>Healthcare Provider</option>
+              <option>Insurance Provider</option>
+              <option>Admin</option>
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+          </div>
+        </div>
+
+        {/* Users Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-700">
+                <th className="text-left text-gray-400 py-3 px-4 text-sm">Address</th>
+                <th className="text-left text-gray-400 py-3 px-4 text-sm">Current Role</th>
+                <th className="text-left text-gray-400 py-3 px-4 text-sm">Status</th>
+                <th className="text-left text-gray-400 py-3 px-4 text-sm">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredUsers.map((user, idx) => (
+                <tr key={idx} className="border-b border-gray-800 hover:bg-gray-800">
+                  <td className="text-white py-3 px-4 text-sm font-mono">
+                    {user.address}
+                  </td>
+                  <td className={`py-3 px-4 text-sm font-semibold ${getRoleColor(user.currentRole)}`}>
+                    {user.currentRole}
+                  </td>
+                  <td className="py-3 px-4">
+                    <span className="px-3 py-1 bg-green-900/30 text-green-400 border border-green-700 rounded-full text-xs font-medium">
+                      {user.status}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4">
+                    <button className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition">
+                      View Details
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Document Viewer Modal */}
+      {viewModalOpen && selectedRequest && (
+        <DocumentViewerModal
+          isOpen={viewModalOpen}
+          onClose={() => {
+            setViewModalOpen(false);
+            setSelectedRequest(null);
+          }}
+          requestId={selectedRequest.requestId.toNumber()}
+          requesterAddress={selectedRequest.requester}
+        />
+      )}
     </div>
   );
 };

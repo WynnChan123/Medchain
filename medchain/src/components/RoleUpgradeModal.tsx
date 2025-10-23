@@ -1,3 +1,4 @@
+//RoleUpgradeModal.tsx
 import { X } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import FileUploadField from './FileUploadField';
@@ -50,15 +51,26 @@ const RoleUpgradeModal: React.FC<RoleUpgradeModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
+      console.log('Modal opened, fetching admins...');
       getAdmins()
-        .then(setAdmins)
+        .then((adminList) => {
+          console.log('Fetched admins:', adminList);
+          setAdmins(adminList);
+        })
         .catch((err) => console.error('Failed to fetch admins', err));
     }
   }, [isOpen]);
 
   useEffect(() => {
-    const admins = getAdmins();
-    console.log('Admins from contract:', admins);
+    const fetchAdmins = async () => {
+      try {
+        const admins = await getAdmins();
+        console.log('Admins from contract:', admins);
+      } catch (error) {
+        console.error('Error fetching admins:', error);
+      }
+    };
+    fetchAdmins();
   }, []);
 
   useEffect(() => {
@@ -75,58 +87,100 @@ const RoleUpgradeModal: React.FC<RoleUpgradeModalProps> = ({
     if (isOpen) fetchAddress();
   }, [isOpen]);
 
-  const handleSubmit = async () => {
-    try {
-      if (!selectedRole) {
-        print('Please ensure a role is selected', 'warning', ()=> {});
+const handleSubmit = async () => {
+  try {
+    if (!selectedRole) {
+      print('Please ensure a role is selected', 'warning', ()=> {});
+      return;
+    } else if (selectedAdmin.length === 0) {
+      print('Please select an admin', 'warning', ()=> {});
+      return;
+    } else if (!files.id || !files.license || !files.proof) {
+      print('Please ensure all files are attached', 'warning', ()=> {});
+      return;
+    } else {
+      // Additional validation for files
+      console.log('Files validation in modal:');
+      console.log('files.id:', files.id);
+      console.log('files.license:', files.license);
+      console.log('files.proof:', files.proof);
+      
+      if (!files.id.name || !files.license.name || !files.proof.name) {
+        print('One or more files are invalid. Please re-select the files.', 'error', ()=> {});
         return;
-      } else if (selectedAdmin.length === 0) {
-        print('Please select an admin', 'warning', ()=> {});
-        return;
-      } else if (!files.id || !files.license || !files.proof) {
-        print('Please ensure all files are attached', 'warning', ()=> {});
-        return;
-      } else {
-        console.log('No error so far');
-        console.log(selectedRole); //admin logged
-        console.log(typeof files.id); //object logged
-        console.log(typeof organization); //string logged
-        console.log(typeof selectedAdmin); //object logged
-        const adminPublicKeys = await Promise.all(
-          selectedAdmin.map(async (addr) => await getAdminPublicKey(addr))
-        );
-        console.log(typeof adminPublicKeys); //object logged
-        console.log(adminPublicKeys);
-
-        await submitRoleUpgradeRequest(
-          address,
-          { id: files.id, license: files.license, proof: files.proof },
-          {
-            role: selectedRole,
-            organization: organization,
-            additionalInfo: additionalInfo,
-          },
-          selectedAdmin,
-          adminPublicKeys
-        );
-        print('You successfully requested for a role upgrade!', 'success', () =>
-          onClose()
-        );
       }
-    } catch (err: any) {
-      console.error('Error submitting request: ', err);
-
-      // Clean up the error message
-      let errorMessage = 'Failed to submit request';
-
-      if (err.reason) {
-        errorMessage = err.reason.replace('execution reverted: ', '');
-        print(errorMessage, 'error', () => {});
-
-        console.log('Error message:', errorMessage);
+      
+      console.log('No error so far');
+      console.log('Selected role:', selectedRole);
+      console.log('Selected admins:', selectedAdmin);
+      
+      // Fetch admin public keys with better error handling
+      const adminPublicKeys = await Promise.all(
+        selectedAdmin.map(async (addr, index) => {
+          try {
+            const publicKey = await getAdminPublicKey(addr);
+            console.log(`Admin ${index} (${addr}):`, publicKey);
+            
+            if (!publicKey || publicKey === '' || publicKey === '0x') {
+              throw new Error(`Admin ${addr} has no public key set. Please ask the admin to generate and register their keys first.`);
+            }
+            
+            return publicKey;
+          } catch (error) {
+            console.error(`Error fetching public key for admin ${addr}:`, error);
+            throw new Error(`Failed to get public key for admin ${addr.slice(0, 6)}...${addr.slice(-4)}. Admin may need to register their keys first.`);
+          }
+        })
+      );
+      
+      console.log('All admin public keys:', adminPublicKeys);
+      
+      // Verify all keys are valid before proceeding
+      const invalidKeys = adminPublicKeys.filter(key => !key || key === '' || key === '0x');
+      if (invalidKeys.length > 0) {
+        throw new Error('Some admins have not registered their public keys yet. Please select different admins or ask them to register their keys first.');
       }
+
+      await submitRoleUpgradeRequest(
+        address,
+        { id: files.id, license: files.license, proof: files.proof },
+        {
+          role: selectedRole,
+          organization: organization,
+          additionalInfo: additionalInfo,
+        },
+        selectedAdmin,
+        adminPublicKeys
+      );
+      
+      print('You successfully requested for a role upgrade!', 'success', () =>
+        onClose()
+      );
     }
-  };
+  } catch (err: any) {
+    console.error('Error submitting request: ', err);
+
+    let errorMessage = 'Failed to submit request';
+
+    if (err.message) {
+      errorMessage = err.message;
+    } else if (err.reason) {
+      errorMessage = err.reason.replace('execution reverted: ', '');
+    }
+    
+    // Provide more specific error messages for common issues
+    if (errorMessage.includes('File is null or undefined') || errorMessage.includes('One or more files are missing')) {
+      errorMessage = 'Please ensure all files are properly selected before submitting.';
+    } else if (errorMessage.includes('Failed to process file')) {
+      errorMessage = 'There was an issue processing one of your files. Please try selecting the files again.';
+    } else if (errorMessage.includes('Admin')) {
+      errorMessage = 'Admin key issue: ' + errorMessage;
+    }
+    
+    print(errorMessage, 'error', () => {});
+    console.log('Error message:', errorMessage);
+  }
+};
 
   if (!isOpen) return null;
 

@@ -38,12 +38,16 @@ contract RoleUpgrade is Med2ChainStructs {
     // Store admin public keys (RSA, base64 encoded)
     mapping(address => string) public adminPublicKeys;
 
+    // Map admins to the user pending requests
+    mapping(address => uint[]) public adminToRequests;
+
 
     event RoleUpgradeRequested(uint requestId, userRole newRole, address indexed requester, address[] admins, uint256 timestamp);
     event RoleUpgradeApproved(uint requestId, address indexed userToUpgrade, address indexed approver, uint256 timestamp);
     event RoleUpgradeRejected(uint requestId, address indexed userToUpgrade, address indexed rejector, uint256 timestamp);
 
     modifier onlyAuthorizedAdmin(uint _requestId) {
+        // Check if caller is in the specific request's admin list
         bool isAuthorized = false;
         for (uint i = 0; i < requests[_requestId].adminAddresses.length; i++) {
             if (requests[_requestId].adminAddresses[i] == msg.sender) {
@@ -51,6 +55,17 @@ contract RoleUpgrade is Med2ChainStructs {
                 break;
             }
         }
+        
+        // If not in request-specific list, check if caller is a general admin
+        if (!isAuthorized) {
+            for (uint i = 0; i < adminList.length; i++) {
+                if (adminList[i] == msg.sender) {
+                    isAuthorized = true;
+                    break;
+                }
+            }
+        }
+
         require(isAuthorized, "Only authorized admin can perform this action");
         _;
     }
@@ -92,10 +107,15 @@ contract RoleUpgrade is Med2ChainStructs {
 
         for (uint i = 0; i < admins.length; i++) {
             encryptedKeys[requestId][admins[i]] = encryptedKey[i];
+            adminToRequests[admins[i]].push(requestId);
         }
 
         userToRequests[patient].push(requestId);
         emit RoleUpgradeRequested(requestId, newRole, patient, admins, block.timestamp);
+    }
+
+    function getRequestAdminAddresses(uint _requestId) external view returns (address[] memory) {
+        return requests[_requestId].adminAddresses;
     }
 
     function approveRequest(uint _requestId, address userToUpgrade) external onlyAuthorizedAdmin(_requestId) {
@@ -127,8 +147,23 @@ contract RoleUpgrade is Med2ChainStructs {
     }
 
     // Read encrypted key for current caller (so caller can fetch it)
-    function getEncryptedKeyForCaller(uint _requestId) external view returns (bytes memory) {
+    function getEncryptedKeyForCaller(uint _requestId) external view onlyAuthorizedAdmin(_requestId) returns (bytes memory) {
         return encryptedKeys[_requestId][msg.sender];
+    }
+
+    // Read encrypted key for any admin (fallback function)
+    function getEncryptedKeyForAdmin(uint _requestId, address _admin) external view returns (bytes memory) {
+        // Check if caller is a general admin
+        bool isAdmin = false;
+        for (uint i = 0; i < adminList.length; i++) {
+            if (adminList[i] == msg.sender) {
+                isAdmin = true;
+                break;
+            }
+        }
+        require(isAdmin, "Only admin can perform this action");
+        
+        return encryptedKeys[_requestId][_admin];
     }
 
     function getAdmins() external view returns (address[] memory){        
@@ -144,5 +179,78 @@ contract RoleUpgrade is Med2ChainStructs {
         return adminPublicKeys[_admin];
     }
 
+    function getPendingRequestByUser(address patient) external view returns (RoleUpgradeRequest[] memory){
+        //count pending requests
+        uint[] memory requestIds = userToRequests[patient];
+        uint pendingCount = 0;
+
+        for(uint i=0; i< requestIds.length; i++){
+            if(!requests[requestIds[i]].isProcessed){
+                pendingCount++;
+            }
+        }
+
+        //create an array of pending requests
+        RoleUpgradeRequest[] memory pendingRequests = new RoleUpgradeRequest[](pendingCount);
+        uint currentIndex = 0;
+
+        for (uint i = 0; i < requestIds.length; i++) {
+            if (!requests[requestIds[i]].isProcessed) {
+                pendingRequests[currentIndex] = requests[requestIds[i]];
+                currentIndex++;
+            }
+        }
+
+        return pendingRequests;
+    }
+
+    //getPendingRequestsByAdmin (display pending requests)
+    function getPendingRequestsByAdmin(address adminAddress) external view returns (RoleUpgradeRequest[] memory){
+        uint[] memory requestIds = adminToRequests[adminAddress];
+        uint pendingReview = 0;
+
+        for(uint i=0; i<requestIds.length; i++){
+            if(!requests[requestIds[i]].isProcessed){
+                pendingReview++;
+            }
+        }
+
+        // Create array of pending requests
+        RoleUpgradeRequest[] memory pendingRequests = new RoleUpgradeRequest[](pendingReview);
+        uint currentIndex = 0;
+
+        for (uint i = 0; i < requestIds.length; i++) {
+            if (!requests[requestIds[i]].isProcessed) {
+                pendingRequests[currentIndex] = requests[requestIds[i]];
+                currentIndex++;
+            }
+        }
+
+        return pendingRequests;
+    }
+
+    function getAcknowledgedRequestsByAdmin(address adminAddress) external view returns (RoleUpgradeRequest[] memory){
+        uint[] memory requestIds = adminToRequests[adminAddress];
+        uint reviewedRequest = 0;
+
+        for(uint i=0; i<requestIds.length; i++){
+            if(requests[requestIds[i]].isProcessed){
+                reviewedRequest++;
+            }
+        }
+
+        // Create array of pending requests
+        RoleUpgradeRequest[] memory acknowledgedRequests = new RoleUpgradeRequest[](reviewedRequest);
+        uint currentIndex = 0;
+
+        for (uint i = 0; i < requestIds.length; i++) {
+            if (requests[requestIds[i]].isProcessed) {
+                acknowledgedRequests[currentIndex] = requests[requestIds[i]];
+                currentIndex++;
+            }
+        }
+
+        return acknowledgedRequests;
+    }
 }
 

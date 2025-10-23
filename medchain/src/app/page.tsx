@@ -136,9 +136,9 @@ export default function Login() {
 
         try {
           const roleId = await getRole(signerAddress);
-          alert('Role ID from blockchain:' + roleId);
-          alert('Type of roleId:' + typeof roleId);
-          alert('Is null?' + roleId === null);
+          // alert('Role ID from blockchain:' + roleId);
+          // alert('Type of roleId:' + typeof roleId);
+          // alert('Is null?' + roleId === null);
 
           if (roleId === UserRole.Unregistered) {
             setErrorMessage(
@@ -148,7 +148,7 @@ export default function Login() {
             const encryptedId = ethers.utils.keccak256(
               ethers.utils.toUtf8Bytes(user.id)
             );
-            alert('Encrypted ID:' + encryptedId);
+            // alert('Encrypted ID:' + encryptedId);
             console.log('Signer address:', signerAddress);
             console.log('Public key (from backend or UI):', publicKey);
             const alreadyExists = await userExists(signerAddress);
@@ -174,7 +174,7 @@ export default function Login() {
             }
 
             const roleName = UserRole[finalRole] as keyof typeof UserRole;
-            alert('Role from enum:' + roleName);
+            // alert('Role from enum:' + roleName);
             setRole(roleName);
 
             if (finalRole === UserRole.Admin) {
@@ -282,9 +282,11 @@ export default function Login() {
           </Button>
           {errorMessage && (
             <p
-              className={`${
-                errorMessage == 'Login Successful'
-              } ?? text-green-400 text-center mt-2: `}
+              className={`text-center mt-2 ${
+                errorMessage === 'Login successful'
+                  ? 'text-green-400'
+                  : 'text-red-400'
+              }`}
             >
               {errorMessage}
             </p>

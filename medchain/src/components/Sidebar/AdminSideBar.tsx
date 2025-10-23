@@ -36,14 +36,18 @@ export const menuItems = [
   },
 ];
 
-const AdminSideBar = () => {
-  const [collapsed, setCollapsed] = useState(false);
+export interface SidebarStatus{
+  collapsed: boolean;
+  setCollapsed: (collapsed: boolean) => void;
+}
+
+const AdminSideBar = ({ collapsed, setCollapsed}: SidebarStatus) => {
   const router = useRouter();
   const pathname = usePathname();
 
   return (
     <div
-      className={`bg-blue-950 h-screen p-3 flex flex-col transition-all duration-300 ${
+      className={`bg-blue-950 h-screen p-3 flex flex-col transition-all duration-300 fixed ${
         collapsed ? 'w-20' : 'w-64'
       }`}
     >
@@ -70,8 +74,8 @@ const AdminSideBar = () => {
             href={item.href}
             data-tooltip-id={`tooltip-${index}`}
             data-tooltip-content={collapsed ? item.label : ''}
-            className={`flex items-center gap-4 text-white hover:font-bold hover:bg-blue-200 p-2 rounded-md transition ${
-              pathname === item.href ? `bg-blue-200` : ''
+            className={`flex items-center gap-4 text-white hover:font-bold hover:bg-blue-400 p-2 rounded-md transition ${
+              pathname === item.href ? `bg-blue-600` : ''
             }`}
           >
             {item.icon}
