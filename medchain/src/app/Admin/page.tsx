@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Clock, CheckCircle, XCircle, FileText, ChevronDown, Eye } from 'lucide-react';
 import { BigNumber, ethers } from 'ethers';
-import { getRole, getAdminPublicKey, getPendingRequestsByAdmin, getAcknowledgedRequestsByAdmin, approveUpgrade, rejectRequest } from '@/lib/integration';
+import { getRole, getAdminPublicKey, getPendingRequestsByAdmin, getAcknowledgedRequestsByAdmin, approveUpgrade, rejectRequest, getAllUsers } from '@/lib/integration';
 import { UserRole } from '../../../utils/userRole';
 import { generateAndRegisterAdminKey } from '@/lib/adminKeys';
 import DocumentViewerModal from '@/components/DocumentViewerModal';
@@ -21,9 +21,9 @@ interface RoleUpgradeRequest {
 }
 
 interface User {
-  address: string;
+  walletAddress: string;
+  isActive: 'Active' | 'Inactive';
   currentRole: string;
-  status: 'Active' | 'Inactive';
 }
 
 const Dashboard = () => {
@@ -90,7 +90,23 @@ const Dashboard = () => {
 
       // Fetch pending and processed requests
       await fetchRequests(address);
-      await fetchUsers();
+
+      console.log('Fetching users for admin dashboard...');
+      await getAllUsers();
+      const allUsers = await getAllUsers();
+
+      const usersWithRoles: User[] = await Promise.all(allUsers.map(async (user: User) => {
+        const userRole = await getRole(user.walletAddress);
+        return{
+          ...user,
+          currentRole: UserRole[userRole]
+        }
+      }));
+
+      setUsers(usersWithRoles);
+      await getRole(allUsers[0].walletAddress);
+      console.log('First user role check:', await getRole(allUsers[0].walletAddress));
+      console.log('Fetched all users for admin dashboard', allUsers);
     };
 
     init();
@@ -119,21 +135,27 @@ const Dashboard = () => {
     }
   };
 
-  const fetchUsers = async () => {
-    try {
-      // Mock data for now
-      const mockUsers: User[] = [
-        { address: '0x123...abc', currentRole: 'Patient', status: 'Active' },
-        { address: '0x456...def', currentRole: 'Healthcare Provider', status: 'Active' },
-        { address: '0x789...ghi', currentRole: 'Insurance Provider', status: 'Active' },
-        { address: '0xabc...123', currentRole: 'Admin', status: 'Active' },
-      ];
+  // const displayUsers = async() => {
+  //   try{
+  //     const allUsers = await getAllUsers();
 
-      setUsers(mockUsers);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-    }
-  };
+  //   }
+  // }
+  // const fetchUsers = async () => {
+  //   try {
+  //     // Mock data for now
+  //     const mockUsers: User[] = [
+  //       { address: '0x123...abc', currentRole: 'Patient', status: 'Active' },
+  //       { address: '0x456...def', currentRole: 'Healthcare Provider', status: 'Active' },
+  //       { address: '0x789...ghi', currentRole: 'Insurance Provider', status: 'Active' },
+  //       { address: '0xabc...123', currentRole: 'Admin', status: 'Active' },
+  //     ];
+
+  //     setUsers(mockUsers);
+  //   } catch (error) {
+  //     console.error('Error fetching users:', error);
+  //   }
+  // };
 
   const handleViewDocuments = (request: RoleUpgradeRequest) => {
     setSelectedRequest(request);
@@ -196,7 +218,7 @@ const Dashboard = () => {
   };
 
   const filteredUsers = users.filter(user => {
-    const matchesSearch = user.address.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = user.walletAddress.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = roleFilter === 'All Roles' || user.currentRole === roleFilter;
     return matchesSearch && matchesRole;
   });
@@ -347,10 +369,10 @@ const Dashboard = () => {
                       {UserRole[request.newRole]}
                     </td>
                     <td className="py-3 px-4">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      <span className={`px-3 py-1 text-xs font-medium ${
                         request.isApproved === true 
-                          ? 'bg-green-900/30 text-green-400 border border-green-700'
-                          : 'bg-red-900/30 text-red-400 border border-red-700'
+                          ? ' text-green-400'
+                          : ' text-red-400 '
                       }`}>
                         {request.isApproved === true ? (
                           <span className="flex items-center gap-1">
@@ -439,14 +461,14 @@ const Dashboard = () => {
               {filteredUsers.map((user, idx) => (
                 <tr key={idx} className="border-b border-gray-800 hover:bg-gray-800">
                   <td className="text-white py-3 px-4 text-sm font-mono">
-                    {user.address}
+                    {user?.walletAddress?.slice(0, 6)}...{user.walletAddress?.slice(-4)}
                   </td>
                   <td className={`py-3 px-4 text-sm font-semibold ${getRoleColor(user.currentRole)}`}>
                     {user.currentRole}
                   </td>
                   <td className="py-3 px-4">
                     <span className="px-3 py-1 bg-green-900/30 text-green-400 border border-green-700 rounded-full text-xs font-medium">
-                      {user.status}
+                      {user.isActive? 'Active' : 'Inactive'}
                     </span>
                   </td>
                   <td className="py-3 px-4">

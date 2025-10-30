@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   House,
+  Upload,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Tooltip } from 'react-tooltip';
@@ -24,7 +25,12 @@ export const menuItems = [
   {
     icon: <House size={20} />,
     label: 'Home Page',
-    href: '/Patient',
+    href: '/Patient'
+  },
+  {
+    icon: <Upload size={20} />,
+    label: 'Upload Records',
+    href: '/Patient/Upload'
   }
 ];
 

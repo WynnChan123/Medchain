@@ -7,7 +7,7 @@ import { read } from 'node:fs';
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_SMART_CONTRACT_ADDRESS!;
 const UPGRADE_ADDRESS = process.env.NEXT_PUBLIC_ROLE_UPGRADE_ADDRESS!;
-
+const USER_MANAGEMENT_ADDRESS = process.env.NEXT_PUBLIC_USER_MANAGEMENT!;
 export interface User {
   role: UserRole;
   encryptedId: string;
@@ -79,6 +79,17 @@ export async function writeUpgradeContract(){
 
   const abi = await fetchAbiFromEtherscan(UPGRADE_ADDRESS);
   return new ethers.Contract(UPGRADE_ADDRESS, abi, signer);
+}
+
+export async function readUserManagementContract(){
+  if(!window.ethereum) throw new Error('MetaMask not found');
+  await (window.ethereum as any).request({ method: 'eth_requestAccounts' });
+
+  const provider = new ethers.providers.Web3Provider(window.ethereum);
+  const signer = await provider.getSigner();
+
+  const abi = await fetchAbiFromEtherscan(USER_MANAGEMENT_ADDRESS);
+  return new ethers.Contract(USER_MANAGEMENT_ADDRESS, abi, signer);
 }
 
 export async function registerUser(
@@ -587,6 +598,17 @@ export async function getAcknowledgedRequestsByAdmin(adminAddress: string){
     return tx;
   }catch(error){
     console.log("Failed to return the pending requests for admin", error);
+    throw error;
+  }
+}
+
+export async function getAllUsers(){
+  try{
+    const contract = await readUserManagementContract();
+    const tx = await contract.getAllUsers();
+    return tx;
+  }catch(error){
+    console.log("Failed to return all users", error);
     throw error;
   }
 }

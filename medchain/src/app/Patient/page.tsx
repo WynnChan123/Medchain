@@ -143,6 +143,7 @@ const PatientDashboard = () => {
             title="Add Medical Record"
             description="Upload new medical documents"
             buttonText="+ Upload"
+            href="/Patient/Upload"
           />
           <ActionCard
             icon={<Settings size={24} />}
