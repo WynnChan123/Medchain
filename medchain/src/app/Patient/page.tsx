@@ -30,7 +30,9 @@ const PatientDashboard = () => {
       const userAddress = await signer.getAddress();
       const userRole = await getRole(userAddress);
 
-      if (userRole == UserRole.Admin && UserRole.Patient) {
+      console.log('User role :', userRole);
+
+      if (userRole == UserRole.Admin) {
         setSecondRole('Admin');
         const publicKey = await getAdminPublicKey(userAddress);
         if (!publicKey) {

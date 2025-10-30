@@ -7,6 +7,7 @@ import { getRole, getAdminPublicKey, getPendingRequestsByAdmin, getAcknowledgedR
 import { UserRole } from '../../../utils/userRole';
 import { generateAndRegisterAdminKey } from '@/lib/adminKeys';
 import DocumentViewerModal from '@/components/DocumentViewerModal';
+import useStore from '@/store/userStore';
 
 interface RoleUpgradeRequest {
   requestId: BigNumber;
@@ -34,6 +35,9 @@ const Dashboard = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasPublicKey, setHasPublicKey] = useState<boolean>(false);
+  const role = useStore((state) => state.role);
+  const [userAddress, setUserAddress] = useState<string>('');
+  let signer: ethers.Signer | null = null;
   
   // Document Viewer Modal State
   const [viewModalOpen, setViewModalOpen] = useState(false);
@@ -44,9 +48,13 @@ const Dashboard = () => {
       if (!window.ethereum) return;
       
       const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const signer = provider.getSigner();
-      const userAddress = await signer.getAddress();
-      const userRole = await getRole(userAddress);
+      signer = provider.getSigner();
+      const address = await signer.getAddress();
+      setUserAddress(address);  
+      setWalletAddress(address);
+
+      const userRole = await getRole(address);
+      console.log('User role:', UserRole[userRole]);
 
       // Check and generate admin public key
       if (userRole == UserRole.Admin) {
@@ -61,7 +69,7 @@ const Dashboard = () => {
         //   console.error('Error with admin key', error);
         //   setHasPublicKey(false);
         // }
-        const publicKey = await getAdminPublicKey(userAddress);
+        const publicKey = await getAdminPublicKey(address);
         if (!publicKey) {
           console.log('No public key generated has been generated for admin, creating one...');
           await generateAndRegisterAdminKey();
@@ -80,15 +88,21 @@ const Dashboard = () => {
         }
       }
 
-      setWalletAddress(userAddress);
-
       // Fetch pending and processed requests
-      await fetchRequests(userAddress);
+      await fetchRequests(address);
       await fetchUsers();
     };
 
     init();
   }, []);
+
+  // useEffect(() => {
+  //   if (pendingRequests.length > 0) {
+  //     console.log('Role requester:', pendingRequests[0].requester);
+  //   } else {
+  //     console.log('Role requester: <none>');
+  //   }
+  // }, [pendingRequests]);
 
   const fetchRequests = async (adminAddress: string) => {
     try {

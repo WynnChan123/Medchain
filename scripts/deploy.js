@@ -31,6 +31,11 @@ async function main() {
   await roleUpgrade.waitForDeployment();
   console.log("RoleUpgrade deployed to:", await roleUpgrade.getAddress());
 
+  // Authorize RoleUpgrade contract to call UserManagement
+  console.log("Authorizing RoleUpgrade contract...");
+  await userManagement.authorizeContract(await roleUpgrade.getAddress());
+  console.log("RoleUpgrade contract authorized");
+
   const HealthcareSystem = await ethers.getContractFactory("HealthcareSystem");
   const healthcareSystem = await HealthcareSystem.deploy(
     await userManagement.getAddress(),
