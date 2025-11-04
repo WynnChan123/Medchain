@@ -25,16 +25,16 @@ export const menuItems = [
   {
     icon: <House size={20} />,
     label: 'Home Page',
-    href: '/Patient'
+    href: '/HealthcareProvider'
   },
   {
-    icon: <Eye size={20} />,
-    label: 'View Access Logs',
-    href: '/Patient/Logs'
+    icon: <Upload size={20} />,
+    label: 'Upload Records',
+    href: '/HealthcareProvider/Upload'
   }
 ];
 
-const UserSideBar = ({ collapsed, setCollapsed }: SidebarStatus) => {
+const HealthcareProviderSideBar = ({ collapsed, setCollapsed }: SidebarStatus) => {
   // const [collapsed, setCollapsed] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
@@ -105,4 +105,4 @@ const UserSideBar = ({ collapsed, setCollapsed }: SidebarStatus) => {
   );
 };
 
-export default UserSideBar;
+export default HealthcareProviderSideBar;

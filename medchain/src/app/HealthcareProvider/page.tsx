@@ -11,14 +11,15 @@ import { getAdminPublicKey, getRole } from '@/lib/integration';
 import { UserRole } from '../../../utils/userRole';
 import { generateAndRegisterAdminKey } from '@/lib/adminKeys';
 
-const PatientDashboard = () => {
+const HealthcareProviderDashboard = () => {
   const [selectedRole, setSelectedRole] = useState('');
   const [walletAddress, setWalletAddress] = useState('');
-  const [showPendingBanner, setShowPendingBanner] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const role = useStore((state) => state.role);
   const [secondRole, setSecondRole] = useState('');
   const [hasPublicKey, setHasPublicKey] = useState<boolean>(false);
+  const [sharedRecords, setSharedRecords] = useState([]);
+  const [createdRecords, setCreatedRecords] = useState([]);
 
   useEffect(() => {
     const init = async () => {
@@ -32,8 +33,8 @@ const PatientDashboard = () => {
 
       console.log('User role :', userRole);
 
-      if (userRole == UserRole.Admin) {
-        setSecondRole('Admin');
+      if (userRole == UserRole.HealthcareProvider) {
+        setSecondRole('Healthcare Provider');
         const publicKey = await getAdminPublicKey(userAddress);
         if (!publicKey) {
           console.log('No key found, generating a new key for new admin');
@@ -41,7 +42,7 @@ const PatientDashboard = () => {
           setHasPublicKey(true);
           console.log('Successfully generated a new key');
         } else {
-          console.log('Admin already has a public key');
+          console.log('Doctor already has a public key');
           setHasPublicKey(true);
         }
       } else {
@@ -85,52 +86,28 @@ const PatientDashboard = () => {
 
   return (
     <div className="space-y-6">
-      {/* Pending Banner */}
-      {showPendingBanner && (
-        <div className="bg-yellow-900 border border-yellow-700 rounded-lg p-4 flex items-start gap-4">
-          <Clock className="text-yellow-400 mt-1" size={20} />
-          <div className="flex-1">
-            <h3 className="text-yellow-100 font-semibold mb-1">
-              ⏳ Role Upgrade Pending
-            </h3>
-            <p className="text-yellow-200 text-sm mb-2">
-              Your request to become a Healthcare Provider is under review.
-              You'll be notified once an admin approves.
-            </p>
-            <p className="text-yellow-300 text-xs mb-3">
-              Submitted: {new Date().toLocaleDateString()}
-            </p>
-            <div className="flex gap-3">
-              <button className="px-4 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm">
-                View Details
-              </button>
-              <button
-                onClick={() => setShowPendingBanner(false)}
-                className="px-4 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm"
-              >
-                Cancel Request
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Welcome Card */}
       <div className="bg-gradient-to-r from-blue-900 to-blue-800 rounded-lg p-6 shadow-lg border border-blue-700">
         <h2 className="text-white text-xl font-semibold mb-2">
-          Welcome back, {walletAddress || '0x1234...5678'}
+          Admin Dashboard
         </h2>
-        <p className="text-blue-200 mb-4">Current Role: {secondRole== ""? role: secondRole}</p>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-          <p className="text-blue-100 text-sm">
-            Want to become a Healthcare Provider or Insurer?
-          </p>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="px-4 py-2 bg-white text-blue-900 rounded-lg font-medium hover:bg-blue-50 transition flex items-center gap-2 text-sm"
-          >
-            Request Role Upgrade →
-          </button>
+        <p className="text-white mb-2">
+          Wallet: {walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : 'Connecting...'}
+        </p>
+        <div className="flex gap-4 text-sm">
+          <div className="bg-blue-600 px-4 py-2 rounded-lg">
+            <p className="text-white">Medical Records Patients Shared With You</p>
+            <p className="text-white font-bold text-lg">{sharedRecords.length}</p>
+          </div>
+          <div className="bg-blue-600 px-4 py-2 rounded-lg">
+            <p className="text-white">Total Created Records</p>
+            <p className="text-white font-bold text-lg">{createdRecords.length}</p>
+          </div>
+          <div className="bg-blue-600 px-4 py-2 rounded-lg">
+            <p className="text-white">Public Key</p>
+            <p className="text-white font-bold text-lg">{hasPublicKey ? '✅' : '⏳'}</p>
+          </div>
         </div>
       </div>
 
@@ -138,13 +115,13 @@ const PatientDashboard = () => {
       <div>
         <h3 className="text-white text-lg font-semibold mb-4">Quick Actions</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* <ActionCard
+          <ActionCard
             icon={<Upload size={24} />}
             title="Add Medical Record"
             description="Upload new medical documents"
             buttonText="+ Upload"
             href="/Patient/Upload"
-          /> */}
+          />
           <ActionCard
             icon={<Settings size={24} />}
             title="Manage Access"
@@ -164,8 +141,12 @@ const PatientDashboard = () => {
       <div className="bg-gray-900 rounded-lg p-6 border border-gray-700">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-white text-lg font-semibold">
-            My Medical Records
+            Created Medical Records
           </h3>
+          <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 text-sm">
+            <Plus size={16} />
+            Create Record
+          </button>
         </div>
 
         {medicalRecords.length > 0 ? (
@@ -228,7 +209,7 @@ const PatientDashboard = () => {
             <thead>
               <tr className="border-b border-gray-700">
                 <th className="text-left text-gray-400 py-3 px-4 text-sm">
-                  Provider/Insurer
+                  Patient
                 </th>
                 <th className="text-left text-gray-400 py-3 px-4 text-sm">
                   Records Shared
@@ -285,4 +266,4 @@ const PatientDashboard = () => {
   );
 };
 
-export default PatientDashboard;
+export default HealthcareProviderDashboard;

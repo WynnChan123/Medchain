@@ -26,26 +26,34 @@ contract AccessControlManagement is Med2ChainStructs {
         medicalRecordsContract = _medicalRecordsContract;
     }
 
-    function grantAccess(address walletAddress, string memory medicalRecordID) external {
+    function grantAccess(address patientAddress, address walletAddress, string memory medicalRecordID) external {
         //criteria for granting access to users: only patients can grant access and medical record needs to exist
-        require(IUserManagement(userManagementContract).getUserRole(msg.sender) == userRole.Patient, "Only patients are allowed to grant access to third parties");
-        require(IMedicalRecords(medicalRecordsContract).recordExists(msg.sender, medicalRecordID), "Patient record does not exist");
-        require(!accessControl[msg.sender][walletAddress][medicalRecordID], "Access already granted");
+        require(IUserManagement(userManagementContract).getUserRole(msg.sender) == userRole.Patient || msg.sender == medicalRecordsContract, "Only patients are allowed to grant access to third parties");
+        // Security: If called by a patient directly (not via medicalRecordsContract), ensure they can only grant access to their own records
+        if (msg.sender != medicalRecordsContract) {
+            require(msg.sender == patientAddress, "Patients can only grant access to their own records");
+        }
+        require(IMedicalRecords(medicalRecordsContract).recordExists(patientAddress, medicalRecordID), "Patient record does not exist");
+        require(!accessControl[patientAddress][walletAddress][medicalRecordID], "Access already granted");
         require(IUserManagement(userManagementContract).users(walletAddress).isActive, "Target user is not active");
 
-        accessControl[msg.sender][walletAddress][medicalRecordID] = true;
-        grantedPeople[msg.sender][medicalRecordID].push(walletAddress);
+        accessControl[patientAddress][walletAddress][medicalRecordID] = true;
+        grantedPeople[patientAddress][medicalRecordID].push(walletAddress);
 
-        emit GrantAccess(msg.sender, walletAddress, block.timestamp);
+        emit GrantAccess(patientAddress, walletAddress, block.timestamp);
     }
 
-    function revokeAccess(address walletAddress, string memory medicalRecordID) external {
-        require(IUserManagement(userManagementContract).getUserRole(msg.sender) == userRole.Patient, "Only patients are allowed to revoke access from third parties");
-        require(IMedicalRecords(medicalRecordsContract).recordExists(msg.sender, medicalRecordID), "Patient record does not exist");
+    function revokeAccess(address patientAddress, address walletAddress, string memory medicalRecordID) external {
+        require(IUserManagement(userManagementContract).getUserRole(msg.sender) == userRole.Patient || msg.sender == medicalRecordsContract, "Only patients are allowed to revoke access from third parties");
+        // Security: If called by a patient directly (not via medicalRecordsContract), ensure they can only revoke access from their own records
+        if (msg.sender != medicalRecordsContract) {
+            require(msg.sender == patientAddress, "Patients can only revoke access from their own records");
+        }
+        require(IMedicalRecords(medicalRecordsContract).recordExists(patientAddress, medicalRecordID), "Patient record does not exist");
 
-        accessControl[msg.sender][walletAddress][medicalRecordID] = false;
+        accessControl[patientAddress][walletAddress][medicalRecordID] = false;
 
-        address[] storage grantedPeopleArray = grantedPeople[msg.sender][medicalRecordID];
+        address[] storage grantedPeopleArray = grantedPeople[patientAddress][medicalRecordID];
 
         for (uint i = 0; i < grantedPeopleArray.length; i++) {
             if (grantedPeopleArray[i] == walletAddress) {
@@ -55,7 +63,7 @@ contract AccessControlManagement is Med2ChainStructs {
             }
         }
 
-        emit RevokeAccess(msg.sender, walletAddress, block.timestamp);
+        emit RevokeAccess(patientAddress, walletAddress, block.timestamp);
     }
 
     function checkWhoHasAccess(string memory medicalRecordID) external view returns(address[] memory) {

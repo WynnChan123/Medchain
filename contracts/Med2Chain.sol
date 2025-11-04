@@ -39,14 +39,7 @@ abstract contract Med2ChainStructs {
     struct MedicalRecord{
         address patientAddress;
         string medicalRecordID;
-        string patientName;
-        string dateOfBirth;
-        string gender;
-        string phoneNumber;
-        string houseAddress;
-        string medicalHistory;
-        string recordType;
-        string ipfsHash;
+        string cid;
     }
 
     struct UpdateHistory{
@@ -72,6 +65,8 @@ interface IMedicalRecords {
 
 interface IAccessControl {
     function accessControl(address patient, address requester, string memory recordId) external view returns (bool);
+    function grantAccess(address patient, address to, string memory recordId) external;
+    function revokeAccess(address patient, address to, string memory recordId) external;
 }
 
 // interface IRoleUpgrade {

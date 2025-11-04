@@ -204,20 +204,15 @@ describe('Healthcare System Contracts', function () {
 
     it('Should allow doctors to add medical records', async function () {
       const recordId = 'LAB_001';
+      const patientKey = ethers.toUtf8Bytes('aes-key-for-patient');
 
       await medicalRecords
         .connect(doctor)
         .addMedicalRecord(
           await patient.getAddress(),
           recordId,
-          'John Doe',
-          '1990-01-01',
-          'Male',
-          '123-456-7890',
-          '123 Main St',
-          'Blood test results normal',
-          'Laboratory',
-          'QmHash123'
+          'QmEncryptedCidV1',
+          patientKey
         );
 
       const record = await medicalRecords.patientMedicalRecord(
@@ -225,12 +220,18 @@ describe('Healthcare System Contracts', function () {
         recordId
       );
       expect(record.medicalRecordID).to.equal(recordId);
-      expect(record.patientName).to.equal('John Doe');
-      expect(record.recordType).to.equal('Laboratory');
+      expect(record.patientAddress).to.equal(await patient.getAddress());
+      expect(record.cid).to.equal('QmEncryptedCidV1');
+      const storedKey = await medicalRecords.encryptedKeys(
+        recordId,
+        await patient.getAddress()
+      );
+      expect(storedKey).to.equal(ethers.hexlify(patientKey));
     });
 
     it('Should prevent non-doctors from adding medical records', async function () {
       const recordId = 'LAB_001';
+      const patientKey = ethers.toUtf8Bytes('aes-key-for-patient');
 
       await expect(
         medicalRecords
@@ -238,34 +239,23 @@ describe('Healthcare System Contracts', function () {
           .addMedicalRecord(
             await patient.getAddress(),
             recordId,
-            'John Doe',
-            '1990-01-01',
-            'Male',
-            '123-456-7890',
-            '123 Main St',
-            'Blood test results',
-            'Laboratory',
-            'QmHash123'
+            'QmHash123',
+            patientKey
           )
       ).to.be.revertedWith('Only doctors can add records');
     });
 
     it('Should prevent duplicate record IDs', async function () {
       const recordId = 'LAB_001';
+      const patientKey = ethers.toUtf8Bytes('aes-key-for-patient');
 
       await medicalRecords
         .connect(doctor)
         .addMedicalRecord(
           await patient.getAddress(),
           recordId,
-          'John Doe',
-          '1990-01-01',
-          'Male',
-          '123-456-7890',
-          '123 Main St',
-          'Blood test results',
-          'Laboratory',
-          'QmHash123'
+          'QmHash123',
+          patientKey
         );
 
       await expect(
@@ -274,34 +264,23 @@ describe('Healthcare System Contracts', function () {
           .addMedicalRecord(
             await patient.getAddress(),
             recordId,
-            'Jane Doe',
-            '1992-01-01',
-            'Female',
-            '123-456-7891',
-            '124 Main St',
-            'X-ray results',
-            'Radiology',
-            'QmHash124'
+            'QmHash124',
+            patientKey
           )
       ).to.be.revertedWith('Record already exists');
     });
 
     it('Should generate consistent record hash', async function () {
       const recordId = 'LAB_001';
+      const patientKey = ethers.toUtf8Bytes('aes-key-for-patient');
 
       await medicalRecords
         .connect(doctor)
         .addMedicalRecord(
           await patient.getAddress(),
           recordId,
-          'John Doe',
-          '1990-01-01',
-          'Male',
-          '123-456-7890',
-          '123 Main St',
-          'Blood test results',
-          'Laboratory',
-          'QmHash123'
+          'QmHash123',
+          patientKey
         );
 
       const hash1 = await medicalRecords.getRecordHash(
@@ -352,26 +331,21 @@ describe('Healthcare System Contracts', function () {
         .approveRequest(1, await doctor.getAddress());
 
       // Add medical record
+      const patientKey = ethers.toUtf8Bytes('aes-key-for-patient');
       await medicalRecords
         .connect(doctor)
         .addMedicalRecord(
           await patient.getAddress(),
           recordId,
-          'John Doe',
-          '1990-01-01',
-          'Male',
-          '123-456-7890',
-          '123 Main St',
-          'Blood test results',
-          'Laboratory',
-          'QmHash123'
+          'QmHash123',
+          patientKey
         );
     });
 
     it('Should allow patients to grant access', async function () {
       await accessControl
         .connect(patient)
-        .grantAccess(await doctor.getAddress(), recordId);
+        .grantAccess(await patient.getAddress(), await doctor.getAddress(), recordId);
 
       const hasAccess = await accessControl.accessControl(
         await patient.getAddress(),
@@ -385,7 +359,7 @@ describe('Healthcare System Contracts', function () {
       await expect(
         accessControl
           .connect(doctor)
-          .grantAccess(await doctor.getAddress(), recordId)
+          .grantAccess(await patient.getAddress(), await doctor.getAddress(), recordId)
       ).to.be.revertedWith(
         'Only patients are allowed to grant access to third parties'
       );
@@ -395,18 +369,18 @@ describe('Healthcare System Contracts', function () {
       await expect(
         accessControl
           .connect(patient)
-          .grantAccess(await doctor.getAddress(), 'NON_EXISTENT')
+          .grantAccess(await patient.getAddress(), await doctor.getAddress(), 'NON_EXISTENT')
       ).to.be.revertedWith('Patient record does not exist');
     });
 
     it('Should allow patients to revoke access', async function () {
       await accessControl
         .connect(patient)
-        .grantAccess(await doctor.getAddress(), recordId);
+        .grantAccess(await patient.getAddress(), await doctor.getAddress(), recordId);
 
       await accessControl
         .connect(patient)
-        .revokeAccess(await doctor.getAddress(), recordId);
+        .revokeAccess(await patient.getAddress(), await doctor.getAddress(), recordId);
 
       const hasAccess = await accessControl.accessControl(
         await patient.getAddress(),
@@ -419,7 +393,7 @@ describe('Healthcare System Contracts', function () {
     it('Should track who has access', async function () {
       await accessControl
         .connect(patient)
-        .grantAccess(await doctor.getAddress(), recordId);
+        .grantAccess(await patient.getAddress(), await doctor.getAddress(), recordId);
 
       const grantedPeople = await accessControl
         .connect(patient)
@@ -430,13 +404,160 @@ describe('Healthcare System Contracts', function () {
     it('Should prevent duplicate access grants', async function () {
       await accessControl
         .connect(patient)
-        .grantAccess(await doctor.getAddress(), recordId);
+        .grantAccess(await patient.getAddress(), await doctor.getAddress(), recordId);
 
       await expect(
         accessControl
           .connect(patient)
-          .grantAccess(await doctor.getAddress(), recordId)
+          .grantAccess(await patient.getAddress(), await doctor.getAddress(), recordId)
       ).to.be.revertedWith('Access already granted');
+    });
+
+    it('Should prevent patients from granting access to other patients records', async function () {
+      // Register another patient - use a new signer
+      const signers = await ethers.getSigners();
+      const patient2 = signers[4]; // Use the 5th signer (index 4) to avoid conflicts
+      await healthcareSystem
+        .connect(patient2)
+        .registerUser(await patient2.getAddress(), ethers.keccak256(ethers.toUtf8Bytes('patient2')), 1);
+
+      // Patient tries to grant access to another patient's record
+      await expect(
+        accessControl
+          .connect(patient)
+          .grantAccess(await patient2.getAddress(), await doctor.getAddress(), recordId)
+      ).to.be.revertedWith('Patients can only grant access to their own records');
+    });
+
+    it('Should prevent patients from revoking access from other patients records', async function () {
+      // Register another patient and create a record for them - use a new signer
+      const signers = await ethers.getSigners();
+      const patient2 = signers[4]; // Use the 5th signer (index 4) to avoid conflicts
+      await healthcareSystem
+        .connect(patient2)
+        .registerUser(await patient2.getAddress(), ethers.keccak256(ethers.toUtf8Bytes('patient2')), 1);
+
+      const recordId2 = 'LAB_002';
+      const patient2Key = ethers.toUtf8Bytes('aes-key-for-patient2');
+      await medicalRecords
+        .connect(doctor)
+        .addMedicalRecord(
+          await patient2.getAddress(),
+          recordId2,
+          'QmHash124',
+          patient2Key
+        );
+
+      // Patient2 grants access to doctor
+      await accessControl
+        .connect(patient2)
+        .grantAccess(await patient2.getAddress(), await doctor.getAddress(), recordId2);
+
+      // Patient tries to revoke access from patient2's record
+      await expect(
+        accessControl
+          .connect(patient)
+          .revokeAccess(await patient2.getAddress(), await doctor.getAddress(), recordId2)
+      ).to.be.revertedWith('Patients can only revoke access from their own records');
+    });
+
+    it('Should allow shareMedicalRecord wrapper function to work correctly', async function () {
+      const recipientKey = ethers.toUtf8Bytes('aes-key-for-doctor');
+      await expect(
+        medicalRecords
+          .connect(patient)
+          .shareMedicalRecord(
+            await patient.getAddress(),
+            recordId,
+            await doctor.getAddress(),
+            await accessControl.getAddress(),
+            recipientKey
+          )
+      ).to.emit(medicalRecords, 'KeyStored');
+
+      const hasAccess = await accessControl.accessControl(
+        await patient.getAddress(),
+        await doctor.getAddress(),
+        recordId
+      );
+      expect(hasAccess).to.be.true;
+    });
+
+    it('Should prevent shareMedicalRecord from being called by non-patients', async function () {
+      const recipientKey = ethers.toUtf8Bytes('aes-key-for-doctor');
+      await expect(
+        medicalRecords
+          .connect(doctor)
+          .shareMedicalRecord(
+            await patient.getAddress(),
+            recordId,
+            await doctor.getAddress(),
+            await accessControl.getAddress(),
+            recipientKey
+          )
+      ).to.be.revertedWith('Only patients can share records');
+    });
+
+    it('Should prevent shareMedicalRecord from sharing other patients records', async function () {
+      // Register another patient - use a new signer
+      const signers = await ethers.getSigners();
+      const patient2 = signers[4]; // Use the 5th signer (index 4) to avoid conflicts
+      await healthcareSystem
+        .connect(patient2)
+        .registerUser(await patient2.getAddress(), ethers.keccak256(ethers.toUtf8Bytes('patient2')), 1);
+
+      const recordId2 = 'LAB_002';
+      const patient2Key = ethers.toUtf8Bytes('aes-key-for-patient2');
+      await medicalRecords
+        .connect(doctor)
+        .addMedicalRecord(
+          await patient2.getAddress(),
+          recordId2,
+          'QmHash123',
+          patient2Key
+        );
+
+      const recipientKey = ethers.toUtf8Bytes('aes-key-for-doctor');
+      await expect(
+        medicalRecords
+          .connect(patient)
+          .shareMedicalRecord(
+            await patient2.getAddress(),
+            recordId2,
+            await doctor.getAddress(),
+            await accessControl.getAddress(),
+            recipientKey
+          )
+      ).to.be.revertedWith('Patients can only share their own records');
+    });
+
+    it('Should allow revoking access that was never granted (no operation)', async function () {
+      // Try to revoke access that was never granted - should not revert
+      await accessControl
+        .connect(patient)
+        .revokeAccess(await patient.getAddress(), await doctor.getAddress(), recordId);
+
+      const hasAccess = await accessControl.accessControl(
+        await patient.getAddress(),
+        await doctor.getAddress(),
+        recordId
+      );
+      expect(hasAccess).to.be.false;
+    });
+
+    it('Should return empty array when checking access for non-existent record', async function () {
+      const grantedPeople = await accessControl
+        .connect(patient)
+        .checkWhoHasAccess('NON_EXISTENT_RECORD');
+      expect(grantedPeople.length).to.equal(0);
+    });
+
+    it('Should prevent non-patients from checking who has access', async function () {
+      await expect(
+        accessControl
+          .connect(doctor)
+          .checkWhoHasAccess(recordId)
+      ).to.be.revertedWith('Only patients are allowed to check who has access of their documents');
     });
   });
 
@@ -985,102 +1106,102 @@ describe('Healthcare System Contracts', function () {
       expect(acknowledgedRequests[1].isApproved).to.be.false;
     });
 
-     describe('getRequestAdminAddresses', function () {
-    it('Should return the admin addresses for a request', async function () {
-      const admins = [await admin.getAddress()];
+    describe('getRequestAdminAddresses', function () {
+      it('Should return the admin addresses for a request', async function () {
+        const admins = [await admin.getAddress()];
 
-      await roleUpgrade
-        .connect(patient)
-        .submitUpgradeRequest(
-          await patient.getAddress(),
-          cid,
-          2,
-          admins,
-          encryptedKey
-        );
+        await roleUpgrade
+          .connect(patient)
+          .submitUpgradeRequest(
+            await patient.getAddress(),
+            cid,
+            2,
+            admins,
+            encryptedKey
+          );
 
-      const requestAdmins = await roleUpgrade.getRequestAdminAddresses(1);
+        const requestAdmins = await roleUpgrade.getRequestAdminAddresses(1);
 
-      expect(requestAdmins.length).to.equal(1);
-      expect(requestAdmins[0]).to.equal(await admin.getAddress());
+        expect(requestAdmins.length).to.equal(1);
+        expect(requestAdmins[0]).to.equal(await admin.getAddress());
+      });
+
+      it('Should return multiple admin addresses for a request', async function () {
+        await healthcareSystem
+          .connect(doctor)
+          .registerUser(await doctor.getAddress(), doctorHashedId, 1);
+
+        const initialAdmins = [await admin.getAddress()];
+        const initialEncryptedKey = [ethers.toUtf8Bytes('Key')];
+
+        await roleUpgrade
+          .connect(doctor)
+          .submitUpgradeRequest(
+            await doctor.getAddress(),
+            'QmDoctorAdminCID',
+            4,
+            initialAdmins,
+            initialEncryptedKey
+          );
+
+        await roleUpgrade
+          .connect(admin)
+          .approveRequest(1, await doctor.getAddress());
+
+        const multipleAdmins = [
+          await admin.getAddress(),
+          await doctor.getAddress()
+        ];
+        const multipleKeys = [
+          ethers.toUtf8Bytes('Key1'),
+          ethers.toUtf8Bytes('Key2')
+        ];
+
+        await roleUpgrade
+          .connect(patient)
+          .submitUpgradeRequest(
+            await patient.getAddress(),
+            cid,
+            2,
+            multipleAdmins,
+            multipleKeys
+          );
+
+        const requestAdmins = await roleUpgrade.getRequestAdminAddresses(2);
+
+        expect(requestAdmins.length).to.equal(2);
+        expect(requestAdmins).to.include(await admin.getAddress());
+        expect(requestAdmins).to.include(await doctor.getAddress());
+      });
+
+      it('Should return empty array for non-existent request', async function () {
+        const requestAdmins = await roleUpgrade.getRequestAdminAddresses(999);
+        expect(requestAdmins.length).to.equal(0);
+      });
+
+      it('Should maintain admin addresses after request is processed', async function () {
+        const admins = [await admin.getAddress()];
+
+        await roleUpgrade
+          .connect(patient)
+          .submitUpgradeRequest(
+            await patient.getAddress(),
+            cid,
+            2,
+            admins,
+            encryptedKey
+          );
+
+        await roleUpgrade
+          .connect(admin)
+          .approveRequest(1, await patient.getAddress());
+
+        const requestAdmins = await roleUpgrade.getRequestAdminAddresses(1);
+
+        expect(requestAdmins.length).to.equal(1);
+        expect(requestAdmins[0]).to.equal(await admin.getAddress());
+      });
     });
-
-    it('Should return multiple admin addresses for a request', async function () {
-      await healthcareSystem
-        .connect(doctor)
-        .registerUser(await doctor.getAddress(), doctorHashedId, 1);
-
-      const initialAdmins = [await admin.getAddress()];
-      const initialEncryptedKey = [ethers.toUtf8Bytes('Key')];
-      
-      await roleUpgrade
-        .connect(doctor)
-        .submitUpgradeRequest(
-          await doctor.getAddress(),
-          'QmDoctorAdminCID',
-          4,
-          initialAdmins,
-          initialEncryptedKey
-        );
-
-      await roleUpgrade
-        .connect(admin)
-        .approveRequest(1, await doctor.getAddress());
-
-      const multipleAdmins = [
-        await admin.getAddress(),
-        await doctor.getAddress()
-      ];
-      const multipleKeys = [
-        ethers.toUtf8Bytes('Key1'),
-        ethers.toUtf8Bytes('Key2')
-      ];
-
-      await roleUpgrade
-        .connect(patient)
-        .submitUpgradeRequest(
-          await patient.getAddress(),
-          cid,
-          2,
-          multipleAdmins,
-          multipleKeys
-        );
-
-      const requestAdmins = await roleUpgrade.getRequestAdminAddresses(2);
-
-      expect(requestAdmins.length).to.equal(2);
-      expect(requestAdmins).to.include(await admin.getAddress());
-      expect(requestAdmins).to.include(await doctor.getAddress());
-    });
-
-    it('Should return empty array for non-existent request', async function () {
-      const requestAdmins = await roleUpgrade.getRequestAdminAddresses(999);
-      expect(requestAdmins.length).to.equal(0);
-    });
-
-    it('Should maintain admin addresses after request is processed', async function () {
-      const admins = [await admin.getAddress()];
-
-      await roleUpgrade
-        .connect(patient)
-        .submitUpgradeRequest(
-          await patient.getAddress(),
-          cid,
-          2,
-          admins,
-          encryptedKey
-        );
-
-      await roleUpgrade
-        .connect(admin)
-        .approveRequest(1, await patient.getAddress());
-
-      const requestAdmins = await roleUpgrade.getRequestAdminAddresses(1);
-
-      expect(requestAdmins.length).to.equal(1);
-      expect(requestAdmins[0]).to.equal(await admin.getAddress());
-    });
-  });
   });
 
   describe('Integration Tests', function () {
@@ -1113,76 +1234,73 @@ describe('Healthcare System Contracts', function () {
         .connect(admin)
         .approveRequest(1, await doctor.getAddress());
 
+      const patientKey = ethers.toUtf8Bytes('aes-key-for-patient');
       await medicalRecords
         .connect(doctor)
         .addMedicalRecord(
           await patient.getAddress(),
           recordId,
-          'John Doe',
-          '1990-01-01',
-          'Male',
-          '123-456-7890',
-          '123 Main St',
-          'Blood test results normal',
-          'Laboratory',
-          'QmHash123'
+          'QmHash123',
+          patientKey
         );
     });
 
     it('Should allow authorized updates to medical records', async function () {
       await accessControl
         .connect(patient)
-        .grantAccess(await doctor.getAddress(), recordId);
+        .grantAccess(await patient.getAddress(), await doctor.getAddress(), recordId);
 
-      await medicalRecords
-        .connect(doctor)
-        .updateRecord(
-          await patient.getAddress(),
-          recordId,
-          'Updated blood test results - cholesterol high',
-          'Follow-up required',
-          'medicalHistory',
-          await accessControl.getAddress()
-        );
-
-      const updatedRecord = await medicalRecords.patientMedicalRecord(
-        await patient.getAddress(),
-        recordId
-      );
-      expect(updatedRecord.medicalHistory).to.equal(
-        'Updated blood test results - cholesterol high'
-      );
-    });
-
-    it('Should prevent unauthorized updates', async function () {
+      const newPatientKey = ethers.toUtf8Bytes('new-aes-key-for-patient');
       await expect(
         medicalRecords
           .connect(doctor)
           .updateRecord(
             await patient.getAddress(),
             recordId,
-            'Unauthorized update',
-            'Hacking attempt',
-            'medicalHistory',
-            await accessControl.getAddress()
+            'QmEncryptedCidV2',
+            'Follow-up required',
+            await accessControl.getAddress(),
+            newPatientKey
           )
+      ).to.emit(medicalRecords, 'RecordUpdated');
+
+      const updatedRecord = await medicalRecords.patientMedicalRecord(
+        await patient.getAddress(),
+        recordId
+      );
+      expect(updatedRecord.cid).to.equal('QmEncryptedCidV2');
+    });
+
+    it('Should prevent unauthorized updates', async function () {
+      // Don't grant access - doctor should not be able to update
+      const newPatientKey = ethers.toUtf8Bytes('new-aes-key-for-patient');
+      await expect(
+        medicalRecords.connect(doctor).updateRecord(
+          await patient.getAddress(),
+          recordId,
+          'QmEncryptedCidV2',
+          'Follow-up required',
+          await accessControl.getAddress(),
+          newPatientKey
+        )
       ).to.be.revertedWith('No access to this record');
     });
 
     it('Should maintain update history', async function () {
       await accessControl
         .connect(patient)
-        .grantAccess(await doctor.getAddress(), recordId);
+        .grantAccess(await patient.getAddress(), await doctor.getAddress(), recordId);
 
+      const newPatientKey = ethers.toUtf8Bytes('new-aes-key-for-patient');
       await medicalRecords
         .connect(doctor)
         .updateRecord(
           await patient.getAddress(),
           recordId,
-          'Updated results',
+          'QmEncryptedCidV2',
           'Routine update',
-          'medicalHistory',
-          await accessControl.getAddress()
+          await accessControl.getAddress(),
+          newPatientKey
         );
 
       const history = await medicalRecords
@@ -1194,7 +1312,7 @@ describe('Healthcare System Contracts', function () {
         );
 
       expect(history.length).to.equal(1);
-      expect(history[0].fieldUpdated).to.equal('medicalHistory');
+      expect(history[0].fieldUpdated).to.equal('cid');
       expect(history[0].updatedBy).to.equal(await doctor.getAddress());
       expect(history[0].updateReason).to.equal('Routine update');
     });
@@ -1202,17 +1320,18 @@ describe('Healthcare System Contracts', function () {
     it('Should allow patients to view their own record history', async function () {
       await accessControl
         .connect(patient)
-        .grantAccess(doctor.getAddress(), recordId);
+        .grantAccess(await patient.getAddress(), await doctor.getAddress(), recordId);
 
+      const newPatientKey = ethers.toUtf8Bytes('new-aes-key-for-patient');
       await medicalRecords
         .connect(doctor)
         .updateRecord(
           await patient.getAddress(),
           recordId,
-          'Updated',
+          'QmEncryptedCidV2',
           'Test update',
-          'medicalHistory',
-          await accessControl.getAddress()
+          await accessControl.getAddress(),
+          newPatientKey
         );
 
       const history = await medicalRecords
@@ -1236,6 +1355,157 @@ describe('Healthcare System Contracts', function () {
             await accessControl.getAddress()
           )
       ).to.be.revertedWith('No authorized access to view history');
+    });
+  });
+
+  describe('MedicalRecordsManagement - New Functions', function () {
+    const recordId = 'LAB_001';
+
+    beforeEach(async function () {
+      await healthcareSystem
+        .connect(patient)
+        .registerUser(await patient.getAddress(), patientHashedId, 1);
+
+      await healthcareSystem
+        .connect(doctor)
+        .registerUser(await doctor.getAddress(), doctorHashedId, 1);
+
+      // Upgrade doctor to HealthcareProvider
+      const admins = [await admin.getAddress()];
+      const encryptedKey = [ethers.toUtf8Bytes('EncryptedKeyExample')];
+
+      await roleUpgrade
+        .connect(doctor)
+        .submitUpgradeRequest(
+          await doctor.getAddress(),
+          'QmDoctorCID',
+          2,
+          admins,
+          encryptedKey
+        );
+
+      await roleUpgrade
+        .connect(admin)
+        .approveRequest(1, await doctor.getAddress());
+
+      // Add medical record
+      const patientKey = ethers.toUtf8Bytes('aes-key-for-patient');
+      await medicalRecords
+        .connect(doctor)
+        .addMedicalRecord(
+          await patient.getAddress(),
+          recordId,
+          'QmHash123',
+          patientKey
+        );
+    });
+
+    it('Should return medical record using getMedicalRecord', async function () {
+      const record = await medicalRecords.getMedicalRecord(
+        await patient.getAddress(),
+        recordId
+      );
+
+      expect(record.medicalRecordID).to.equal(recordId);
+      expect(record.patientAddress).to.equal(await patient.getAddress());
+      expect(record.cid).to.equal('QmHash123');
+    });
+
+    it('Should return false for non-existent record using recordExists', async function () {
+      expect(
+        await medicalRecords.recordExists(
+          await patient.getAddress(),
+          'NON_EXISTENT'
+        )
+      ).to.be.false;
+    });
+
+    it('Should return true for existing record using recordExists', async function () {
+      expect(
+        await medicalRecords.recordExists(
+          await patient.getAddress(),
+          recordId
+        )
+      ).to.be.true;
+    });
+
+    it('Should allow patient to get their own encrypted key', async function () {
+      const patientKey = ethers.toUtf8Bytes('aes-key-for-patient');
+      const retrievedKey = await medicalRecords
+        .connect(patient)
+        .getEncryptedKeyForPatient(recordId, await patient.getAddress());
+
+      expect(ethers.hexlify(retrievedKey)).to.equal(ethers.hexlify(patientKey));
+    });
+
+    it('Should prevent non-patients from getting patient encrypted key', async function () {
+      await expect(
+        medicalRecords
+          .connect(doctor)
+          .getEncryptedKeyForPatient(recordId, await patient.getAddress())
+      ).to.be.revertedWith('Only the patient can retrieve their own key');
+    });
+
+    it('Should allow patient to get encrypted key using getEncryptedKey', async function () {
+      const patientKey = ethers.toUtf8Bytes('aes-key-for-patient');
+      const retrievedKey = await medicalRecords
+        .connect(patient)
+        .getEncryptedKey(
+          recordId,
+          await patient.getAddress(),
+          await accessControl.getAddress()
+        );
+
+      expect(ethers.hexlify(retrievedKey)).to.equal(ethers.hexlify(patientKey));
+    });
+
+    it('Should allow doctor with access to get encrypted key using getEncryptedKey', async function () {
+      // Share record with doctor (this stores encrypted key for doctor)
+      const doctorKey = ethers.toUtf8Bytes('aes-key-for-doctor');
+      await medicalRecords
+        .connect(patient)
+        .shareMedicalRecord(
+          await patient.getAddress(),
+          recordId,
+          await doctor.getAddress(),
+          await accessControl.getAddress(),
+          doctorKey
+        );
+
+      // Doctor should be able to retrieve their encrypted key
+      const retrievedKey = await medicalRecords
+        .connect(doctor)
+        .getEncryptedKey(
+          recordId,
+          await patient.getAddress(),
+          await accessControl.getAddress()
+        );
+
+      expect(ethers.hexlify(retrievedKey)).to.equal(ethers.hexlify(doctorKey));
+    });
+
+    it('Should prevent doctor without access from getting encrypted key', async function () {
+      await expect(
+        medicalRecords
+          .connect(doctor)
+          .getEncryptedKey(
+            recordId,
+            await patient.getAddress(),
+            await accessControl.getAddress()
+          )
+      ).to.be.revertedWith('No access to this record');
+    });
+
+    it('Should prevent getting encrypted key for non-existent record', async function () {
+      await expect(
+        medicalRecords
+          .connect(patient)
+          .getEncryptedKey(
+            'NON_EXISTENT',
+            await patient.getAddress(),
+            await accessControl.getAddress()
+          )
+      ).to.be.revertedWith('Record does not exist');
     });
   });
 
@@ -1268,20 +1538,15 @@ describe('Healthcare System Contracts', function () {
         .connect(admin)
         .approveRequest(1, await doctor.getAddress());
 
+      const patientKey = ethers.toUtf8Bytes('aes-key-for-patient');
       await expect(
         medicalRecords
           .connect(doctor)
           .addMedicalRecord(
             await patient.getAddress(),
             recordId,
-            'John Doe',
-            '1990-01-01',
-            'Male',
-            '123-456-7890',
-            '123 Main St',
-            'Blood test',
-            'Laboratory',
-            'QmHash123'
+            'QmHash123',
+            patientKey
           )
       ).to.be.revertedWith('Medical record ID required');
     });
@@ -1326,37 +1591,34 @@ describe('Healthcare System Contracts', function () {
         .approveRequest(1, await doctor.getAddress());
 
       const recordId = 'LAB_001';
+      const patientKey = ethers.toUtf8Bytes('aes-key-for-patient');
       await medicalRecords
         .connect(doctor)
         .addMedicalRecord(
           await patient.getAddress(),
           recordId,
-          'John Doe',
-          '1990-01-01',
-          'Male',
-          '123-456-7890',
-          '123 Main St',
-          'Blood test',
-          'Laboratory',
-          'QmHash123'
+          'QmHash123',
+          patientKey
         );
 
       await accessControl
         .connect(patient)
-        .grantAccess(await doctor.getAddress(), recordId);
+        .grantAccess(await patient.getAddress(), await doctor.getAddress(), recordId);
 
+      const newPatientKey = ethers.toUtf8Bytes('new-aes-key-for-patient');
+      // updateRecord now only updates CID, so this should work
       await expect(
         medicalRecords
           .connect(doctor)
           .updateRecord(
             await patient.getAddress(),
             recordId,
-            'Hacked',
+            'QmHackedCid',
             'Evil update',
-            'patientName',
-            await accessControl.getAddress()
+            await accessControl.getAddress(),
+            newPatientKey
           )
-      ).to.be.revertedWith('Field cannot be updated');
+      ).to.emit(medicalRecords, 'RecordUpdated');
     });
 
     it('Should return the newly added admins', async function () {
