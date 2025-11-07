@@ -2,15 +2,21 @@
 
 import React, { useState } from 'react';
 import { Upload, FileText, Image, File, X } from 'lucide-react';
+import PatientShareListModal from '@/components/PatientShareListModal';
+
+type uploadedFile = {
+  id:number,
+  file: File,
+  name: string,
+  size: string,
+  type: string
+}
 
 const UploadPage = () => {
-  const [uploadedFiles, setUploadedFiles] = useState([
-    { id: 1, name: 'Document1.docx', size: '2.3 MB', type: 'docx' },
-    { id: 2, name: 'Subdivision.xlsx', size: '1.8 MB', type: 'xlsx' },
-    { id: 3, name: 'Projects.txt.txt', size: '945 KB', type: 'txt' },
-    { id: 4, name: 'download.json', size: '1.2 MB', type: 'json' }
-  ]);
+  const [uploadedFiles, setUploadedFiles] = useState<uploadedFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedPatient, setSelectedPatient] = useState<string>('');
 
   // DRAG AND DROP LOGIC EXPLANATION:
   // Step 1: handleDrag - Detects when user drags files over the drop zone
@@ -49,8 +55,9 @@ const UploadPage = () => {
   // Step 4: handleFiles - Central function that processes files
   // Converts FileList to array, creates file objects, adds to state
   const handleFiles = (files: FileList) => {
-    const newFiles = Array.from(files).map((file, index) => ({
+    const newFiles:uploadedFile[] = Array.from(files).map((file, index) => ({
       id: Date.now() + index, // Unique ID for each file
+      file: file,
       name: file.name,
       size: formatFileSize(file.size),
       type: file.name.split('.').pop() || 'unknown' // Get file extension with fallback
@@ -153,8 +160,23 @@ const UploadPage = () => {
         </div>
       </div>
       <div className="flex justify-end p-6 max-w-7xl mx-auto">
-        <button className="flex bg-blue-500 justify-end p-3 rounded-lg justify-items-end hover:bg-blue-600 text-white">Share Files</button>
+        <button 
+          className="flex bg-blue-500 justify-end p-3 rounded-lg justify-items-end hover:bg-blue-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={()=> setModalOpen(true)}
+          disabled={uploadedFiles.length === 0}
+        >
+          Share Files
+        </button>
       </div>
+      {modalOpen && (
+        <PatientShareListModal 
+          isOpen={modalOpen} 
+          onClose={() => setModalOpen(false)} 
+          selectedPatient={selectedPatient} 
+          setSelectedPatient={setSelectedPatient}
+          setFiles={uploadedFiles}
+        />
+      )}
     </div>
   );
 };

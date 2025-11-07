@@ -299,6 +299,182 @@ describe('Healthcare System Contracts', function () {
     });
   });
 
+  describe('MedicalRecordsManagement - Patient Record Tracking IDs', function () {
+    beforeEach(async function (){
+      await healthcareSystem
+        .connect(patient)
+        .registerUser(await patient.getAddress(), patientHashedId, 1);
+
+      await healthcareSystem
+        .connect(doctor)
+        .registerUser(await doctor.getAddress(), doctorHashedId, 1);
+
+      const admins = [await admin.getAddress()];
+      const encryptedKey = [ethers.toUtf8Bytes('EncryptedKeyExample')];
+
+      await roleUpgrade
+        .connect(doctor)
+        .submitUpgradeRequest(
+          await doctor.getAddress(),
+          'QmDoctorCID',
+          2,
+          admins,
+          encryptedKey
+        )
+
+        await roleUpgrade
+        .connect(admin)
+        .approveRequest(1, await doctor.getAddress());
+    })
+    
+    it('Should return no record IDs for patient with no records', async function () {
+      const recordIDs = await medicalRecords.getPatientRecordIDs(await patient.getAddress());
+      expect(recordIDs.length).to.equal(0);
+    })
+
+    it('Should return a single record ID when record is added', async function () {
+      const recordId = 'LAB_001';
+      const patientKey = ethers.toUtf8Bytes('aes-key-for-patient');
+
+      await medicalRecords
+        .connect(doctor)
+        .addMedicalRecord(
+          await patient.getAddress(),
+          recordId, 
+          'QmHash123',
+          patientKey
+        )
+
+      const recordIDs = await medicalRecords.getPatientRecordIDs(await patient.getAddress());
+      expect(recordIDs.length).to.equal(1);
+      expect(recordIDs[0]).to.equal(recordId);
+    })
+
+
+    it('Should return multiple record IDs when multiple records are added', async function () {
+      const recordId1 = 'LAB_001';
+      const recordId2 = 'LAB_002';
+      const patientKey = ethers.toUtf8Bytes('aes-key-for-patient');
+
+      await medicalRecords
+        .connect(doctor)
+        .addMedicalRecord(
+          await patient.getAddress(),
+          recordId1,
+          'QmHash123',
+          patientKey
+        )
+      
+      await medicalRecords
+        .connect(doctor)
+        .addMedicalRecord(
+          await patient.getAddress(),
+          recordId2,
+          'QmHash124',
+          patientKey
+        )
+
+      const recordIDs = await medicalRecords.getPatientRecordIDs(await patient.getAddress());
+      expect(recordIDs.length).to.equal(2);
+      expect(recordIDs).to.include(recordId1);
+      expect(recordIDs).to.include(recordId2);
+    });
+
+    it('Should return record IDs specific to each patient', async function () {
+      // Register patient 2
+      const signers = await ethers.getSigners();
+      const patient2 = signers[4];
+
+      await healthcareSystem
+        .connect(patient2)
+        .registerUser(await patient2.getAddress(), ethers.keccak256(ethers.toUtf8Bytes('patient2')), 1);
+
+      const recordId1 = 'LAB_001';
+      const recordId2 = 'LAB_002';
+      const patientKey = ethers.toUtf8Bytes('aes-key-for-patient');
+
+      await medicalRecords
+        .connect(doctor)
+        .addMedicalRecord(
+          await patient.getAddress(),
+          recordId1,
+          'QmHash123',
+          patientKey
+        )
+      
+      await medicalRecords
+        .connect(doctor)
+        .addMedicalRecord(
+        await patient2.getAddress(),
+        recordId2,
+        'QmHash124',
+        patientKey
+        )
+
+      const recordIDforPatient1 = await medicalRecords.getPatientRecordIDs(await patient.getAddress());
+      expect(recordIDforPatient1.length).to.equal(1);
+      expect(recordIDforPatient1[0]).to.equal(recordId1);
+      const recordIDforPatient2 = await medicalRecords.getPatientRecordIDs(await patient2.getAddress());
+      expect(recordIDforPatient2.length).to.equal(1);
+      expect(recordIDforPatient2[0]).to.equal(recordId2);
+    })
+
+    it('Should return the correct record count after adding multiple records', async function(){
+      const recordId1 = 'LAB_001';
+      const recordId2 = 'LAB_002';
+      const patientKey = ethers.toUtf8Bytes('aes-key-for-patient');
+
+      await medicalRecords
+        .connect(doctor)
+        .addMedicalRecord(
+          await patient.getAddress(),
+          recordId1, 
+          'QmHash123',
+          patientKey
+        )
+
+      await medicalRecords
+        .connect(doctor)
+        .addMedicalRecord(
+          await patient.getAddress(),
+          recordId2, 
+          'QmHash124',
+          patientKey
+        )
+      
+      const recordCount = await medicalRecords.recordCount(await patient.getAddress());
+      expect(recordCount).to.equal(2);
+      const recordIDcount = await medicalRecords.getPatientRecordIDs(await patient.getAddress());
+      expect(recordIDcount.length).to.equal(2);
+    })
+
+    it('Should preserve order of record IDs as they are added', async function () {
+      const recordIds = ['LAB_001', 'XRAY_001', 'MRI_001', 'BLOOD_001'];
+      const patientKey = ethers.toUtf8Bytes('aes-key-for-patient');
+
+      for (let i = 0; i < recordIds.length; i++) {
+        await medicalRecords
+          .connect(doctor)
+          .addMedicalRecord(
+            await patient.getAddress(),
+            recordIds[i],
+            `QmCid${i}`,
+            patientKey
+          );
+      }
+
+      const retrievedRecordIDs = await medicalRecords.getPatientRecordIDs(
+        await patient.getAddress()
+      );
+
+      expect(retrievedRecordIDs.length).to.equal(recordIds.length);
+      for (let i = 0; i < recordIds.length; i++) {
+        expect(retrievedRecordIDs[i]).to.equal(recordIds[i]);
+      }
+    });
+  });
+
+
   describe('AccessControlManagement', function () {
     const recordId = 'LAB_001';
 

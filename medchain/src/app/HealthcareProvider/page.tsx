@@ -37,7 +37,7 @@ const HealthcareProviderDashboard = () => {
         setSecondRole('Healthcare Provider');
         const publicKey = await getAdminPublicKey(userAddress);
         if (!publicKey) {
-          console.log('No key found, generating a new key for new admin');
+          console.log('No key found, generating a new key for the doctor');
           await generateAndRegisterAdminKey();
           setHasPublicKey(true);
           console.log('Successfully generated a new key');
@@ -90,14 +90,14 @@ const HealthcareProviderDashboard = () => {
       {/* Welcome Card */}
       <div className="bg-gradient-to-r from-blue-900 to-blue-800 rounded-lg p-6 shadow-lg border border-blue-700">
         <h2 className="text-white text-xl font-semibold mb-2">
-          Admin Dashboard
+          Doctor's Dashboard
         </h2>
         <p className="text-white mb-2">
           Wallet: {walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : 'Connecting...'}
         </p>
         <div className="flex gap-4 text-sm">
           <div className="bg-blue-600 px-4 py-2 rounded-lg">
-            <p className="text-white">Medical Records Patients Shared With You</p>
+            <p className="text-white">Records Shared With You</p>
             <p className="text-white font-bold text-lg">{sharedRecords.length}</p>
           </div>
           <div className="bg-blue-600 px-4 py-2 rounded-lg">

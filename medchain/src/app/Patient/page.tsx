@@ -1,15 +1,35 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Upload, Settings, Eye, FileText, Plus, X, Clock } from 'lucide-react';
+import { Upload, Settings, Eye, FileText, Plus, X, Clock, Share2 } from 'lucide-react';
 import useStore from '@/store/userStore';
 import FileUploadField from '@/components/FileUploadField';
 import ActionCard from '@/components/ActionCard';
 import RoleUpgradeModal from '@/components/RoleUpgradeModal';
-import { ethers } from 'ethers';
-import { getAdminPublicKey, getRole } from '@/lib/integration';
+import { BigNumber, ethers } from 'ethers';
+import { getAdminPublicKey, getPatientRecordIDs, getRole } from '@/lib/integration';
 import { UserRole } from '../../../utils/userRole';
 import { generateAndRegisterAdminKey } from '@/lib/adminKeys';
+import { generateAndRegisterPatientKey, getPatientPublicKey } from '@/lib/patientKeys';
+import PatientRecordViewerModal from '@/components/PatientRecordViewerModal';
+import { fetchAndDecryptPatientRecord } from '@/lib/decryption';
+
+interface medicalDocuments{
+  recordId: string;
+  cid: string;
+  file: {
+    name: string;
+    type: string;
+    base64: string;
+  };
+  metadata: {
+    requestId: string
+    recordType: string;
+    timestamp: any; 
+    [key: string]: any;
+  };
+}
+
 
 const PatientDashboard = () => {
   const [selectedRole, setSelectedRole] = useState('');
@@ -18,7 +38,13 @@ const PatientDashboard = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const role = useStore((state) => state.role);
   const [secondRole, setSecondRole] = useState('');
+  const [selectedRecord, setSelectedRecord] = useState<medicalDocuments | null>(null);
+  const [viewDocumentModal, setViewDocumentModal] = useState<boolean>(false);
+  const [medicalRecords, setMedicalRecords] = useState<medicalDocuments[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [hasPublicKey, setHasPublicKey] = useState<boolean>(false);
+  const [selectedDocument, setSelectedDocument] = useState<medicalDocuments>();
 
   useEffect(() => {
     const init = async () => {
@@ -32,20 +58,24 @@ const PatientDashboard = () => {
 
       console.log('User role :', userRole);
 
-      if (userRole == UserRole.Admin) {
+      if (userRole === UserRole.Admin) {
         setSecondRole('Admin');
         const publicKey = await getAdminPublicKey(userAddress);
         if (!publicKey) {
-          console.log('No key found, generating a new key for new admin');
           await generateAndRegisterAdminKey();
           setHasPublicKey(true);
-          console.log('Successfully generated a new key');
         } else {
-          console.log('Admin already has a public key');
           setHasPublicKey(true);
         }
       } else {
-        console.log('User is only a patient');
+        const publicKey = await getPatientPublicKey(userAddress);
+        if (!publicKey) {
+          await generateAndRegisterPatientKey();
+          setHasPublicKey(true);
+        } else {
+          setHasPublicKey(true);
+        }
+        await fetchMedicalRecords(userAddress);
       }
     };
 
@@ -63,20 +93,42 @@ const PatientDashboard = () => {
               `${accounts[0].slice(0, 6)}...${accounts[0].slice(-4)}`
             );
           }
+        })
+        .catch((error) => {
+          console.error('Failed to get wallet address:', error);
+          setWalletAddress('Error fetching address');
         });
     }
   }, []);
 
-  // Mock data - replace with actual blockchain data
-  const medicalRecords = [
-    {
-      id: 'LAB_001',
-      type: 'Blood Test',
-      date: '2025-01-15',
-      status: 'Complete',
-    },
-    { id: 'XRAY_002', type: 'X-Ray', date: '2025-01-10', status: 'Complete' },
-  ];
+  const handleViewRecord = (recordID: medicalDocuments) => {
+    setSelectedDocument(recordID);
+    setViewDocumentModal(true);
+    console.log('Success')
+  } 
+
+  const fetchMedicalRecords = async(patientAddress: string) => {
+    setLoading(true);
+    const recordIDs = await getPatientRecordIDs(patientAddress);
+    const records = await Promise.all(
+      recordIDs.map(async (recordId: string) => {
+        const record = await fetchAndDecryptPatientRecord(patientAddress, recordId);
+        return record;
+      })
+    );
+    console.log('Fetched medical records: ', records);
+    setMedicalRecords(records);
+    setLoading(false);
+  }
+  // const medicalRecords = [
+  //   {
+  //     id: 'LAB_001',
+  //     type: 'Blood Test',
+  //     date: '2025-01-15',
+  //     status: 'Complete',
+  //   },
+  //   { id: 'XRAY_002', type: 'X-Ray', date: '2025-01-10', status: 'Complete' },
+  // ];
 
   const sharedWith = [
     { provider: 'Dr. Smith', address: '0x456...789', recordId: 'LAB_001' },
@@ -168,7 +220,9 @@ const PatientDashboard = () => {
           </h3>
         </div>
 
-        {medicalRecords.length > 0 ? (
+        {loading ? (
+          <div className="text-center py-10 text-gray-400">Loading records...</div>
+        ) : medicalRecords.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -185,37 +239,56 @@ const PatientDashboard = () => {
                   <th className="text-left text-gray-400 py-3 px-4 text-sm">
                     Actions
                   </th>
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">
+                    Share
+                  </th>
                 </tr>
               </thead>
-              <tbody>
-                {medicalRecords.map((record) => (
-                  <tr
-                    key={record.id}
-                    className="border-b border-gray-800 hover:bg-gray-800"
-                  >
-                    <td className="text-white py-3 px-4 text-sm">
-                      {record.id}
-                    </td>
-                    <td className="text-gray-300 py-3 px-4 text-sm">
-                      {record.type}
-                    </td>
-                    <td className="text-gray-300 py-3 px-4 text-sm">
-                      {record.date}
-                    </td>
-                    <td className="py-3 px-4">
-                      <button className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm">
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+<tbody>
+  {medicalRecords.map((record) => (
+    <tr
+      key={record.recordId}
+      className="border-b border-gray-800 hover:bg-gray-800"
+    >
+      <td className="text-white py-3 px-4 text-sm">
+        {record.metadata.requestId}
+      </td>
+      <td className="text-gray-300 py-3 px-4 text-sm">
+        {record.metadata.recordType}
+      </td>
+      <td className="text-gray-300 py-3 px-4 text-sm">
+        {/* Fixed: Access timestamp from metadata and handle different formats */}
+        {record.metadata?.timestamp 
+          ? (typeof record.metadata.timestamp === 'object' && record.metadata.timestamp.toNumber
+              ? new Date(record.metadata.timestamp.toNumber() * 1000).toLocaleString()
+              : new Date(record.metadata.timestamp).toLocaleString())
+          : 'N/A'}
+      </td>
+      <td className="py-3 px-4">
+        <button 
+          onClick={() => handleViewRecord(record)}
+          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm"
+        >
+          View
+        </button>
+      </td>
+      <td className="py-3 px-4">
+        <button 
+          onClick={() => console.log('Hi')}
+          className="flex items-center gap-1 text-purple-400 hover:text-purple-300 text-sm transition"
+        >
+          <Share2 />
+        </button>
+      </td>
+    </tr>
+  ))}
+</tbody>
             </table>
           </div>
         ) : (
           <div className="text-center py-8 text-gray-400">
             <FileText size={48} className="mx-auto mb-3 opacity-50" />
-            <p>No records yet - Add your first medical record</p>
+            <p>No records yet</p>
           </div>
         )}
       </div>
@@ -279,6 +352,15 @@ const PatientDashboard = () => {
           // }}
           selectedRole={selectedRole}
           setSelectedRole={setSelectedRole}
+        />
+      )}
+
+      {viewDocumentModal && (
+        <PatientRecordViewerModal 
+        isOpen={viewDocumentModal}
+        onClose={()=> setViewDocumentModal(false)}
+        recordId={selectedDocument?.recordId ?? null}
+        patientAddress={walletAddress}
         />
       )}
     </div>

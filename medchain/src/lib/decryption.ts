@@ -1,7 +1,12 @@
 // lib/decryption.ts
 import CryptoJS from 'crypto-js';
 import NodeRSA from 'node-rsa';
-import { getEncryptedKey, readUpgradeContract } from './integration';
+import {
+  getEncryptedKey,
+  getEncryptedKeyForPatient,
+  getMedicalRecord,
+  readUpgradeContract,
+} from './integration';
 
 const PINATA_GATEWAY = process.env.NEXT_PUBLIC_PINATA_GATEWAY_URL;
 const PINATA_GATEWAY_TOKEN = process.env.NEXT_PUBLIC_PINATA_GATEWAY_TOKEN;
@@ -154,6 +159,73 @@ export async function fetchAndDecryptDocuments(requestId: number) {
     return decryptedDocuments;
   } catch (error) {
     console.error('Error fetching and decrypting documents:', error);
+    throw error;
+  }
+}
+
+export async function fetchAndDecryptPatientRecord(
+  patientAddress: string,
+  recordId: string
+) {
+  try {
+    if (!patientAddress) {
+      throw new Error('Patient address is required to fetch records');
+    }
+
+    const privateKeyPEM = localStorage.getItem('patientPrivateKey');
+    if (!privateKeyPEM) {
+      throw new Error(
+        'Patient private key not found. Please generate or import your private key to view records.'
+      );
+    }
+
+    const encryptedKeyHex = await getEncryptedKeyForPatient(recordId, patientAddress);
+
+    if (!encryptedKeyHex || encryptedKeyHex === '0x') {
+      throw new Error(
+        'No encrypted key found for this record. The record might not have been shared correctly.'
+      );
+    }
+
+    const aesKeyHex = await decryptAESKey(encryptedKeyHex, privateKeyPEM);
+
+    const record = await getMedicalRecord(patientAddress, recordId);
+    const cid = record?.cid;
+
+    if (!cid) {
+      throw new Error('Unable to locate the record CID on-chain.');
+    }
+
+    const response = await fetch(
+      `http://localhost:8080/api/upload/fetchFromIPFS/${cid}`
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch encrypted record: ${response.statusText}`);
+    }
+
+    const encryptedContent = await response.text();
+    const decryptedData = decryptDocumentContent(encryptedContent, aesKeyHex);
+
+    const file = decryptedData?.file || {};
+    const metadata = decryptedData?.metadata || {};
+
+    return {
+      recordId,
+      cid,
+      file: {
+        name: file.fileName || file.name || recordId,
+        type: file.fileType || file.type || 'application/octet-stream',
+        base64: file.base64 || '',
+      },
+      metadata: {
+        ...metadata,
+        recordType: metadata.recordType || 'Unknown',
+        timestamp: metadata.timestamp || new Date().toISOString(),
+      },
+    };
+  } catch (error) {
+    console.error('Error fetching and decrypting patient record:', error);
     throw error;
   }
 }

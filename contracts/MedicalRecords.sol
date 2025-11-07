@@ -17,6 +17,9 @@ contract MedicalRecordsManagement is Med2ChainStructs {
     // Map request id to recipient address to encrypted AES key bytes
     mapping(string => mapping(address => bytes)) public encryptedKeys;
 
+    //map address of patient to the recordIDs
+    mapping(address => string[]) public patientRecordIDs;
+
     // Reference to user management contract
     address public userManagementContract;
 
@@ -48,6 +51,7 @@ contract MedicalRecordsManagement is Med2ChainStructs {
         });
 
         encryptedKeys[medicalRecordID][patientAddress] = encryptedKeyForPatient;
+        patientRecordIDs[patientAddress].push(medicalRecordID);
 
         recordCount[patientAddress]++;
 
@@ -141,5 +145,9 @@ contract MedicalRecordsManagement is Med2ChainStructs {
     function getEncryptedKeyForPatient(string memory _medicalRecordId, address _patient) external view returns (bytes memory) {
         require(msg.sender == _patient, "Only the patient can retrieve their own key");
         return encryptedKeys[_medicalRecordId][_patient];
+    }
+
+    function getPatientRecordIDs(address patient) external view returns (string[] memory) {
+        return patientRecordIDs[patient];
     }
 }
