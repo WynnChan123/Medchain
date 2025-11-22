@@ -5,7 +5,10 @@ import {
   downloadFile,
   fetchAndDecryptPatientRecord,
 } from '@/lib/decryption';
+import { fetchAndDecryptSharedRecord } from '@/lib/integration';
 import { ethers } from 'ethers';
+import useStore from '@/store/userStore';
+import { UserRole } from '../../utils/userRole';
 
 interface PatientRecordViewerModalProps {
   isOpen: boolean;
@@ -39,42 +42,69 @@ const PatientRecordViewerModal: React.FC<PatientRecordViewerModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const role = useStore((state) => state.role);
 
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
+useEffect(() => {
+  if (!isOpen) {
+    return;
+  }
 
-    if (!recordId) {
-      setError('No record selected.');
-      return;
-    }
+  if (!recordId) {
+    setError('No record selected.');
+    return;
+  }
 
-    const loadRecord = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        if (!window.ethereum) {
-          throw new Error("Ethereum provider not found. Please install MetaMask.");
-        }
-        const provider = new ethers.providers.Web3Provider(window.ethereum);
-        const signer = provider.getSigner();
-        const userAddress = await signer.getAddress();
-        const decryptedRecord = await fetchAndDecryptPatientRecord(
+  const loadRecord = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      if (!window.ethereum) {
+        throw new Error("Ethereum provider not found. Please install MetaMask.");
+      }
+      
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+      const userAddress = await signer.getAddress();
+      
+      let decryptedRecord;
+      
+      // If the user is a Healthcare Provider or Admin, use the shared record decryption
+      if (role === 'HealthcareProvider' || role === 'Admin' || role === 'Insurer') {
+        console.log('🏥 Decrypting as shared record (Doctor/Admin)...');
+        console.log('Patient address:', patientAddress);
+        console.log('Record ID:', recordId);
+        console.log('Doctor address:', userAddress);
+        
+        // This function does everything: gets key, decrypts key, fetches doc, decrypts doc
+        decryptedRecord = await fetchAndDecryptSharedRecord(
+          patientAddress,
+          recordId,
+          userAddress
+        );
+        
+        console.log('✅ Shared record decrypted successfully');
+      } else {
+        // Patient viewing their own record
+        console.log('👤 Decrypting as patient record...');
+        decryptedRecord = await fetchAndDecryptPatientRecord(
           userAddress,
           recordId
         );
-        setDocument(decryptedRecord);
-      } catch (err: any) {
-        console.error('Failed to load patient record:', err);
-        setError(err?.message || 'Failed to load record');
-      } finally {
-        setLoading(false);
+        console.log('✅ Patient record decrypted successfully');
       }
-    };
 
-    loadRecord();
-  }, [isOpen, patientAddress, recordId]);
+      setDocument(decryptedRecord);
+    } catch (err: any) {
+      console.error('❌ Failed to load patient record:', err);
+      setError(err?.message || 'Failed to load record');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  loadRecord();
+}, [isOpen, patientAddress, recordId, role]);
 
   useEffect(() => {
     if (!document?.file?.base64) {
@@ -247,5 +277,6 @@ const PatientRecordViewerModal: React.FC<PatientRecordViewerModalProps> = ({
 };
 
 export default PatientRecordViewerModal;
+
 
 

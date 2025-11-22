@@ -1,4 +1,5 @@
 import { addMedicalRecord, encryptWithPublicKey, fileToBase64, getAdminPublicKey, getAllUsers, getRole } from '@/lib/integration';
+import { getPatientPublicKey } from '@/lib/patientKeys';
 import { X } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { UserRole } from '../../utils/userRole';
@@ -62,74 +63,72 @@ const PatientShareListModal: React.FC<PatientShareListModalProps> = ({
     fetchUsers();
   }, []);
 
-  const handleShare = async() => {
-    try{
-      console.log('Sharing record with patient: ', selectedPatient);
-      const medicalRecordID = `REC-${Date.now()}`; 
+const handleShare = async() => {
+  try {
+    console.log('Sharing record with patient: ', selectedPatient);
+    const medicalRecordID = `REC-${Date.now()}`; 
 
-      //convert to base64
-      const files = setFiles;
-      const base64 = await fileToBase64(files[0].file);
-      console.log('Converted file to base64');
+    //convert to base64
+    const files = setFiles;
+    const base64 = await fileToBase64(files[0].file);
+    console.log('Converted file to base64');
 
-      //aes encrypt json payload
-      const payload = JSON.stringify({
-        file: { fileName: files[0].name, fileType: files[0].type, base64: base64 },
+    //aes encrypt json payload
+    const payload = JSON.stringify({
+      file: { fileName: files[0].name, fileType: files[0].type, base64: base64 },
+      metadata: {
+        patient: selectedPatient,
+        timestamp: new Date().toISOString(),
+        requestId: medicalRecordID,
+        recordType: recordType
+      }
+    });
+    console.log('Created JSON payload for encryption');
+
+    //upload to pinata to get cid
+    const aesKey = CryptoJS.lib.WordArray.random(32);
+    const aesKeyHex = aesKey.toString(CryptoJS.enc.Hex);
+    const encrypted = CryptoJS.AES.encrypt(payload, aesKeyHex).toString();
+    
+    const uploadResponse = await fetch('http://localhost:8080/api/upload/uploadToPinata', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        encryptedData: encrypted,
         metadata: {
           patient: selectedPatient,
           timestamp: new Date().toISOString(),
           requestId: medicalRecordID,
-          recordType: recordType
-        }
-      });
-      console.log('Created JSON payload for encryption');
-
-
-      //upload to pinata to get cid
-      const aesKey = CryptoJS.lib.WordArray.random(32);
-      const aesKeyHex = aesKey.toString(CryptoJS.enc.Hex);
-      const encrypted = CryptoJS.AES.encrypt(payload, aesKeyHex).toString();
-      const uploadResponse = await fetch('http://localhost:8080/api/upload/uploadToPinata', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          encryptedData: encrypted,
-          metadata: {
-            patient: selectedPatient,
-            timestamp: new Date().toISOString(),
-            requestId: medicalRecordID,
-          },
-         }),
-      });
+      }),
+    });
 
-      const result = await uploadResponse.json();
-      const cid = result.cid;
+    const result = await uploadResponse.json();
+    const cid = result.cid;
+    console.log('Uploaded encrypted payload to IPFS, CID: ', cid);
 
-      console.log('Uploaded encrypted payload to IPFS, CID: ', cid);
+    //encrypt the aes key with patient's public key
+    const patientPublicKey = await getAdminPublicKey(selectedPatient);
+    if (!patientPublicKey) throw new Error('Patient has no public key registered');
 
-      //encrypt the aes key with patient's public key
-      const patientPublicKey = await getAdminPublicKey(selectedPatient);
-      if (!patientPublicKey) throw new Error('Patient has no public key registered');
+    // encryptWithPublicKey now returns hex directly
+    const encryptedKeyForPatient = encryptWithPublicKey(aesKeyHex, patientPublicKey);
+    console.log('Encrypted key for patient:', encryptedKeyForPatient);
 
-      const encryptedKeyBase64 = encryptWithPublicKey(aesKeyHex, patientPublicKey);
-
-      // 6) Convert base64 → bytes hex (matches contract bytes)
-      const binary = atob(encryptedKeyBase64);
-      const encryptedKeyForPatient = ethers.utils.hexlify(
-        Uint8Array.from(binary, (c) => c.charCodeAt(0))
-      );
-
-      // add medical record on chain
-      await addMedicalRecord(selectedPatient, medicalRecordID, cid, encryptedKeyForPatient);
-      console.log('Successfully shared record with patient: ', selectedPatient);
-      print('Record shared successfully!', 'success', ()=> onClose());
-    }catch(error){
-      console.error('Error sharing record: ', error);
-      return;
+    // Verify format
+    if (!encryptedKeyForPatient.startsWith('0x')) {
+      throw new Error('Encrypted key is not in hex format');
     }
+
+    // add medical record on chain
+    await addMedicalRecord(selectedPatient, medicalRecordID, cid, encryptedKeyForPatient);
+    console.log('Successfully shared record with patient: ', selectedPatient);
+    print('Record shared successfully!', 'success', () => onClose());
+  } catch(error) {
+    console.error('Error sharing record: ', error);
+    throw error;
   }
+}
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 h-full">

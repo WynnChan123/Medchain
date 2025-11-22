@@ -477,6 +477,8 @@ describe('Healthcare System Contracts', function () {
 
   describe('AccessControlManagement', function () {
     const recordId = 'LAB_001';
+    const recordId2 = 'LAB_002';
+    const aesKey = ethers.toUtf8Bytes('aes-key-for-patient1');
 
     beforeEach(async function () {
       // Register users
@@ -516,6 +518,15 @@ describe('Healthcare System Contracts', function () {
           'QmHash123',
           patientKey
         );
+
+      await medicalRecords
+      .connect(doctor)
+      .addMedicalRecord(
+        await patient.getAddress(),
+        recordId2,
+        'QmHash124',
+        patientKey
+      );
     });
 
     it('Should allow patients to grant access', async function () {
@@ -735,7 +746,614 @@ describe('Healthcare System Contracts', function () {
           .checkWhoHasAccess(recordId)
       ).to.be.revertedWith('Only patients are allowed to check who has access of their documents');
     });
+
+  it('Should allow patients to store encrypted AES key for active recipients', async function () {
+    const signers = await ethers.getSigners();
+    const patient2 = signers[4];
+    
+    await healthcareSystem
+      .connect(patient2)
+      .registerUser(
+        await patient2.getAddress(),
+        ethers.keccak256(ethers.toUtf8Bytes('patient2')),
+        1
+      );
+
+    await expect(
+      accessControl
+        .connect(patient)
+        .storeEncryptedAESKey(
+          await patient.getAddress(),
+          await patient2.getAddress(),
+          recordId,
+          ethers.hexlify(aesKey)
+        )
+    )
+      .to.emit(accessControl, 'EncryptedKeyStored')
+      .withArgs(
+        await patient.getAddress(),
+        await patient2.getAddress(),
+        recordId,
+        await ethers.provider.getBlock('latest').then(b => b.timestamp + 1)
+      );
   });
+
+  it('Should prevent storing empty encrypted keys', async function () {
+    const signers = await ethers.getSigners();
+    const patient2 = signers[4];
+    
+    await healthcareSystem
+      .connect(patient2)
+      .registerUser(
+        await patient2.getAddress(),
+        ethers.keccak256(ethers.toUtf8Bytes('patient2')),
+        1
+      );
+
+    await expect(
+      accessControl
+        .connect(patient)
+        .storeEncryptedAESKey(
+          await patient.getAddress(),
+          await patient2.getAddress(),
+          recordId,
+          '0x'
+        )
+    ).to.be.revertedWith('Key cannot be empty');
+  });
+
+  it('Should prevent storing keys for inactive recipients', async function () {
+    const signers = await ethers.getSigners();
+    const inactiveUser = signers[5];
+
+    await expect(
+      accessControl
+        .connect(patient)
+        .storeEncryptedAESKey(
+          await patient.getAddress(),
+          await inactiveUser.getAddress(),
+          recordId,
+          ethers.hexlify(aesKey)
+        )
+    ).to.be.revertedWith('Recipient is not active');
+  });
+
+  it('Should prevent non-patients from storing keys', async function () {
+    const signers = await ethers.getSigners();
+    const patient2 = signers[4];
+    
+    await healthcareSystem
+      .connect(patient2)
+      .registerUser(
+        await patient2.getAddress(),
+        ethers.keccak256(ethers.toUtf8Bytes('patient2')),
+        1
+      );
+
+    await expect(
+      accessControl
+        .connect(doctor)
+        .storeEncryptedAESKey(
+          await patient.getAddress(),
+          await patient2.getAddress(),
+          recordId,
+          ethers.hexlify(aesKey)
+        )
+    ).to.be.revertedWith('Only patients are allowed to share their AES Key');
+  });
+
+  it('Should prevent patients from storing keys for other patients records', async function () {
+    const signers = await ethers.getSigners();
+    const patient2 = signers[4];
+    const patient3 = signers[5];
+    
+    await healthcareSystem
+      .connect(patient2)
+      .registerUser(
+        await patient2.getAddress(),
+        ethers.keccak256(ethers.toUtf8Bytes('patient2')),
+        1
+      );
+
+    await healthcareSystem
+      .connect(patient3)
+      .registerUser(
+        await patient3.getAddress(),
+        ethers.keccak256(ethers.toUtf8Bytes('patient3')),
+        1
+      );
+
+    await expect(
+      accessControl
+        .connect(patient2)
+        .storeEncryptedAESKey(
+          await patient.getAddress(), // Different patient's address
+          await patient3.getAddress(),
+          recordId,
+          ethers.hexlify(aesKey)
+        )
+    ).to.be.revertedWith('Patients can only revoke access from their own records'); 
+  });
+
+  it('Should allow retrieving encrypted key when access is granted', async function () {
+    const signers = await ethers.getSigners();
+    const patient2 = signers[4];
+    
+    await healthcareSystem
+      .connect(patient2)
+      .registerUser(
+        await patient2.getAddress(),
+        ethers.keccak256(ethers.toUtf8Bytes('patient2')),
+        1
+      );
+
+    // First grant access
+    await accessControl
+      .connect(patient)
+      .grantAccess(
+        await patient.getAddress(),
+        await patient2.getAddress(),
+        recordId
+      );
+
+    // Then store the key
+    const keyHex = ethers.hexlify(aesKey);
+    await accessControl
+      .connect(patient)
+      .storeEncryptedAESKey(
+        await patient.getAddress(),
+        await patient2.getAddress(),
+        recordId,
+        keyHex
+      );
+
+    // Retrieve the key
+    const retrievedKey = await accessControl.getEncryptedAESKey(
+      await patient.getAddress(),
+      await patient2.getAddress(),
+      recordId
+    );
+
+    expect(retrievedKey).to.equal(keyHex);
+  });
+
+  it('Should prevent retrieving key without access', async function () {
+    const signers = await ethers.getSigners();
+    const patient2 = signers[4];
+    
+    await healthcareSystem
+      .connect(patient2)
+      .registerUser(
+        await patient2.getAddress(),
+        ethers.keccak256(ethers.toUtf8Bytes('patient2')),
+        1
+      );
+
+    // Store key without granting access first
+    const keyHex = ethers.hexlify(aesKey);
+    await accessControl
+      .connect(patient)
+      .storeEncryptedAESKey(
+        await patient.getAddress(),
+        await patient2.getAddress(),
+        recordId,
+        keyHex
+      );
+
+    // Try to retrieve without access - should fail
+    await expect(
+      accessControl.getEncryptedAESKey(
+        await patient.getAddress(),
+        await patient2.getAddress(),
+        recordId
+      )
+    ).to.be.revertedWith(
+      "Only insurers, doctors, and patients can get a patient's encrypted AES Key"
+    );
+  });
+
+  it('Should allow updating encrypted key for same recipient', async function () {
+    const signers = await ethers.getSigners();
+    const patient2 = signers[4];
+    
+    await healthcareSystem
+      .connect(patient2)
+      .registerUser(
+        await patient2.getAddress(),
+        ethers.keccak256(ethers.toUtf8Bytes('patient2')),
+        1
+      );
+
+    // Grant access
+    await accessControl
+      .connect(patient)
+      .grantAccess(
+        await patient.getAddress(),
+        await patient2.getAddress(),
+        recordId
+      );
+
+    // Store first key
+    const key1 = ethers.hexlify(ethers.toUtf8Bytes('first-key'));
+    await accessControl
+      .connect(patient)
+      .storeEncryptedAESKey(
+        await patient.getAddress(),
+        await patient2.getAddress(),
+        recordId,
+        key1
+      );
+
+    // Update with new key
+    const key2 = ethers.hexlify(ethers.toUtf8Bytes('second-key'));
+    await accessControl
+      .connect(patient)
+      .storeEncryptedAESKey(
+        await patient.getAddress(),
+        await patient2.getAddress(),
+        recordId,
+        key2
+      );
+
+    // Should return the updated key
+    const retrievedKey = await accessControl.getEncryptedAESKey(
+      await patient.getAddress(),
+      await patient2.getAddress(),
+      recordId
+    );
+
+    expect(retrievedKey).to.equal(key2);
+  
+  });
+
+    it('Should return empty array when user has no shared records', async function () {
+    const sharedRecords = await accessControl.getSharedRecords(
+      await doctor.getAddress()
+    );
+    expect(sharedRecords.length).to.equal(0);
+  });
+
+  it('Should track shared record when access is granted', async function () {
+    await accessControl
+      .connect(patient)
+      .grantAccess(
+        await patient.getAddress(),
+        await doctor.getAddress(),
+        recordId
+      );
+
+    const sharedRecords = await accessControl.getSharedRecords(
+      await doctor.getAddress()
+    );
+
+    expect(sharedRecords.length).to.equal(1);
+    expect(sharedRecords[0].patientAddress).to.equal(
+      await patient.getAddress()
+    );
+    expect(sharedRecords[0].recordId).to.equal(recordId);
+    expect(sharedRecords[0].timestamp).to.be.greaterThan(0);
+  });
+
+  it('Should track multiple shared records for same user', async function () {
+    // Grant access to first record
+    await accessControl
+      .connect(patient)
+      .grantAccess(
+        await patient.getAddress(),
+        await doctor.getAddress(),
+        recordId
+      );
+
+    // Grant access to second record
+    await accessControl
+      .connect(patient)
+      .grantAccess(
+        await patient.getAddress(),
+        await doctor.getAddress(),
+        recordId2
+      );
+
+    const sharedRecords = await accessControl.getSharedRecords(
+      await doctor.getAddress()
+    );
+
+    expect(sharedRecords.length).to.equal(2);
+    expect(sharedRecords[0].recordId).to.equal(recordId);
+    expect(sharedRecords[1].recordId).to.equal(recordId2);
+  });
+
+  it('Should track shared records from different patients', async function () {
+    // Register second patient
+    const signers = await ethers.getSigners();
+    const patient2 = signers[4];
+
+    await healthcareSystem
+      .connect(patient2)
+      .registerUser(
+        await patient2.getAddress(),
+        ethers.keccak256(ethers.toUtf8Bytes('patient2')),
+        1
+      );
+
+    // Add record for patient2
+    const recordId3 = 'LAB_003';
+    const patient2Key = ethers.toUtf8Bytes('aes-key-for-patient2');
+    await medicalRecords
+      .connect(doctor)
+      .addMedicalRecord(
+        await patient2.getAddress(),
+        recordId3,
+        'QmHash125',
+        patient2Key
+      );
+
+    // Both patients grant access to doctor
+    await accessControl
+      .connect(patient)
+      .grantAccess(
+        await patient.getAddress(),
+        await doctor.getAddress(),
+        recordId
+      );
+
+    await accessControl
+      .connect(patient2)
+      .grantAccess(
+        await patient2.getAddress(),
+        await doctor.getAddress(),
+        recordId3
+      );
+
+    const sharedRecords = await accessControl.getSharedRecords(
+      await doctor.getAddress()
+    );
+
+    expect(sharedRecords.length).to.equal(2);
+    expect(sharedRecords[0].patientAddress).to.equal(
+      await patient.getAddress()
+    );
+    expect(sharedRecords[1].patientAddress).to.equal(
+      await patient2.getAddress()
+    );
+  });
+
+  it('Should remove shared record from tracking when access is revoked', async function () {
+    // Grant access
+    await accessControl
+      .connect(patient)
+      .grantAccess(
+        await patient.getAddress(),
+        await doctor.getAddress(),
+        recordId
+      );
+
+    // Verify it's tracked
+    let sharedRecords = await accessControl.getSharedRecords(
+      await doctor.getAddress()
+    );
+    expect(sharedRecords.length).to.equal(1);
+
+    // Revoke access
+    await accessControl
+      .connect(patient)
+      .revokeAccess(
+        await patient.getAddress(),
+        await doctor.getAddress(),
+        recordId
+      );
+
+    // Verify it's removed from tracking
+    sharedRecords = await accessControl.getSharedRecords(
+      await doctor.getAddress()
+    );
+    expect(sharedRecords.length).to.equal(0);
+  });
+
+  it('Should only remove the correct record when revoking from multiple shared records', async function () {
+    // Grant access to both records
+    await accessControl
+      .connect(patient)
+      .grantAccess(
+        await patient.getAddress(),
+        await doctor.getAddress(),
+        recordId
+      );
+
+    await accessControl
+      .connect(patient)
+      .grantAccess(
+        await patient.getAddress(),
+        await doctor.getAddress(),
+        recordId2
+      );
+
+    // Revoke access to first record only
+    await accessControl
+      .connect(patient)
+      .revokeAccess(
+        await patient.getAddress(),
+        await doctor.getAddress(),
+        recordId
+      );
+
+    const sharedRecords = await accessControl.getSharedRecords(
+      await doctor.getAddress()
+    );
+
+    expect(sharedRecords.length).to.equal(1);
+    expect(sharedRecords[0].recordId).to.equal(recordId2);
+  });
+
+  it('Should return correct shared record count', async function () {
+    // Initially zero
+    let count = await accessControl.getSharedRecordCount(
+      await doctor.getAddress()
+    );
+    expect(count).to.equal(0);
+
+    // Grant access to first record
+    await accessControl
+      .connect(patient)
+      .grantAccess(
+        await patient.getAddress(),
+        await doctor.getAddress(),
+        recordId
+      );
+
+    count = await accessControl.getSharedRecordCount(
+      await doctor.getAddress()
+    );
+    expect(count).to.equal(1);
+
+    // Grant access to second record
+    await accessControl
+      .connect(patient)
+      .grantAccess(
+        await patient.getAddress(),
+        await doctor.getAddress(),
+        recordId2
+      );
+
+    count = await accessControl.getSharedRecordCount(
+      await doctor.getAddress()
+    );
+    expect(count).to.equal(2);
+
+    // Revoke one
+    await accessControl
+      .connect(patient)
+      .revokeAccess(
+        await patient.getAddress(),
+        await doctor.getAddress(),
+        recordId
+      );
+
+    count = await accessControl.getSharedRecordCount(
+      await doctor.getAddress()
+    );
+    expect(count).to.equal(1);
+  });
+
+  it('Should not allow duplicate shared record tracking', async function () {
+    // Grant access
+    await accessControl
+      .connect(patient)
+      .grantAccess(
+        await patient.getAddress(),
+        await doctor.getAddress(),
+        recordId
+      );
+
+    // Try to grant again (should revert with "Access already granted")
+    await expect(
+      accessControl
+        .connect(patient)
+        .grantAccess(
+          await patient.getAddress(),
+          await doctor.getAddress(),
+          recordId
+        )
+    ).to.be.revertedWith('Access already granted');
+
+    // Verify only one entry
+    const sharedRecords = await accessControl.getSharedRecords(
+      await doctor.getAddress()
+    );
+    expect(sharedRecords.length).to.equal(1);
+  });
+
+  it('Should preserve timestamps for each shared record', async function () {
+    // Grant access to first record
+    await accessControl
+      .connect(patient)
+      .grantAccess(
+        await patient.getAddress(),
+        await doctor.getAddress(),
+        recordId
+      );
+
+    // Wait a bit (mine a new block)
+    await ethers.provider.send('evm_mine');
+
+    // Grant access to second record
+    await accessControl
+      .connect(patient)
+      .grantAccess(
+        await patient.getAddress(),
+        await doctor.getAddress(),
+        recordId2
+      );
+
+    const sharedRecords = await accessControl.getSharedRecords(
+      await doctor.getAddress()
+    );
+
+    expect(sharedRecords.length).to.equal(2);
+    expect(sharedRecords[0].timestamp).to.be.lessThan(
+      sharedRecords[1].timestamp
+    );
+  });
+
+  it('Should handle revoke when sharedWithUser array has multiple entries', async function () {
+    const signers = await ethers.getSigners();
+    const patient2 = signers[4];
+
+    await healthcareSystem
+      .connect(patient2)
+      .registerUser(
+        await patient2.getAddress(),
+        ethers.keccak256(ethers.toUtf8Bytes('patient2')),
+        1
+      );
+      
+  const recordId3 = 'LAB_003';
+  const patient2Key = ethers.toUtf8Bytes('aes-key-for-patient2');
+  await medicalRecords
+    .connect(doctor)
+    .addMedicalRecord(
+      await patient2.getAddress(),
+      recordId3,
+      'QmHash125',
+      patient2Key
+    );
+
+    // Grant multiple accesses
+    await accessControl
+      .connect(patient)
+      .grantAccess(
+        await patient.getAddress(),
+        await doctor.getAddress(),
+        recordId
+      );
+
+    await accessControl
+      .connect(patient2)
+      .grantAccess(
+        await patient2.getAddress(),
+        await doctor.getAddress(),
+        recordId3
+      );
+
+    // Revoke the first one
+    await accessControl
+      .connect(patient)
+      .revokeAccess(
+        await patient.getAddress(),
+        await doctor.getAddress(),
+        recordId
+      );
+
+    const sharedRecords = await accessControl.getSharedRecords(
+      await doctor.getAddress()
+    );
+
+    expect(sharedRecords.length).to.equal(1);
+    expect(sharedRecords[0].patientAddress).to.equal(
+      await patient2.getAddress()
+    );
+    expect(sharedRecords[0].recordId).to.equal(recordId3);
+  });
+});
 
   describe('RoleUpgrade', function () {
     const cid = 'Qm123abcCIDExample';
@@ -1376,8 +1994,8 @@ describe('Healthcare System Contracts', function () {
 
         expect(requestAdmins.length).to.equal(1);
         expect(requestAdmins[0]).to.equal(await admin.getAddress());
+        });
       });
-    });
   });
 
   describe('Integration Tests', function () {

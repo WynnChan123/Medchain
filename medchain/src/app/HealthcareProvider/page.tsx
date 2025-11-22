@@ -10,6 +10,7 @@ import { ethers } from 'ethers';
 import { getAdminPublicKey, getRole } from '@/lib/integration';
 import { UserRole } from '../../../utils/userRole';
 import { generateAndRegisterAdminKey } from '@/lib/adminKeys';
+import SharedDocumentsTable from '@/components/SharedDocumentsTable';
 
 const HealthcareProviderDashboard = () => {
   const [selectedRole, setSelectedRole] = useState('');
@@ -36,13 +37,18 @@ const HealthcareProviderDashboard = () => {
       if (userRole == UserRole.HealthcareProvider) {
         setSecondRole('Healthcare Provider');
         const publicKey = await getAdminPublicKey(userAddress);
-        if (!publicKey) {
-          console.log('No key found, generating a new key for the doctor');
+        const localPrivateKey = localStorage.getItem('adminPrivateKey');
+        
+        if (!publicKey || !localPrivateKey) {
+          console.log('Key missing (local or on-chain), generating new key...');
+          if (!localPrivateKey && publicKey) {
+             console.warn('Public key exists on-chain but private key is missing locally. Regenerating...');
+          }
           await generateAndRegisterAdminKey();
           setHasPublicKey(true);
           console.log('Successfully generated a new key');
         } else {
-          console.log('Doctor already has a public key');
+          console.log('Doctor already has a public key and local private key');
           setHasPublicKey(true);
         }
       } else {
@@ -60,10 +66,11 @@ const HealthcareProviderDashboard = () => {
         .request({ method: 'eth_accounts' })
         .then((accounts: string[]) => {
           if (accounts[0]) {
-            setWalletAddress(
-              `${accounts[0].slice(0, 6)}...${accounts[0].slice(-4)}`
-            );
+            setWalletAddress(accounts[0]);
           }
+        })
+        .catch((error) => {
+          console.error('Failed to get wallet address:', error);
         });
     }
   }, []);
@@ -77,11 +84,6 @@ const HealthcareProviderDashboard = () => {
       status: 'Complete',
     },
     { id: 'XRAY_002', type: 'X-Ray', date: '2025-01-10', status: 'Complete' },
-  ];
-
-  const sharedWith = [
-    { provider: 'Dr. Smith', address: '0x456...789', recordId: 'LAB_001' },
-    { provider: 'Dr. Jones', address: '0x789...abc', recordId: 'XRAY_002' },
   ];
 
   return (
@@ -202,49 +204,7 @@ const HealthcareProviderDashboard = () => {
       </div>
 
       {/* Shared With */}
-      <div className="bg-gray-900 rounded-lg p-6 border border-gray-700">
-        <h3 className="text-white text-lg font-semibold mb-4">Shared With</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-700">
-                <th className="text-left text-gray-400 py-3 px-4 text-sm">
-                  Patient
-                </th>
-                <th className="text-left text-gray-400 py-3 px-4 text-sm">
-                  Records Shared
-                </th>
-                <th className="text-left text-gray-400 py-3 px-4 text-sm">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {sharedWith.map((share, idx) => (
-                <tr
-                  key={idx}
-                  className="border-b border-gray-800 hover:bg-gray-800"
-                >
-                  <td className="text-white py-3 px-4 text-sm">
-                    {share.provider}{' '}
-                    <span className="text-gray-500 text-xs">
-                      ({share.address})
-                    </span>
-                  </td>
-                  <td className="text-gray-300 py-3 px-4 text-sm">
-                    {share.recordId}
-                  </td>
-                  <td className="py-3 px-4">
-                    <button className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm">
-                      Revoke
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <SharedDocumentsTable walletAddress={walletAddress} />
 
       {/* Role Upgrade Modal */}
       {isModalOpen && (

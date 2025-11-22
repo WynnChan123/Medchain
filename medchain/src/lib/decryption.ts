@@ -24,30 +24,25 @@ export async function decryptAESKey(
     }
     
     console.log('Decrypting AES key...');
-    console.log('Encrypted key hex (first 20 chars):', encryptedKeyHex.substring(0, 20) + '...');
+    
+    // Ensure we have a clean hex string (remove 0x prefix if present)
+    const cleanHex = encryptedKeyHex.startsWith('0x') ? encryptedKeyHex.slice(2) : encryptedKeyHex;
     
     // Convert hex string to bytes
     const encryptedBytes = new Uint8Array(
-      encryptedKeyHex
-        .slice(2)
-        .match(/.{1,2}/g)!
+      cleanHex.match(/.{1,2}/g)!
         .map((byte) => parseInt(byte, 16))
     );
 
-    console.log('Encrypted bytes length:', encryptedBytes.length);
-
     // Convert bytes to base64 (node-rsa expects base64)
     const encryptedBase64 = btoa(String.fromCharCode(...encryptedBytes));
-    console.log('Encrypted base64 length:', encryptedBase64.length);
 
     // Use node-rsa to decrypt (same library used for encryption)
     const rsaPrivateKey = new NodeRSA(privateKeyPEM);
     // Set encryption scheme to PKCS1 padding (must match encryption)
     rsaPrivateKey.setOptions({ encryptionScheme: 'pkcs1' });
     
-    console.log('Attempting decryption...');
     const decryptedAESKey = rsaPrivateKey.decrypt(encryptedBase64, 'utf8');
-    console.log('AES key decrypted successfully, length:', decryptedAESKey.length);
 
     return decryptedAESKey;
   } catch (error) {
@@ -179,7 +174,13 @@ export async function fetchAndDecryptPatientRecord(
       );
     }
 
+    console.log('🔐 Fetching encrypted key for record:', recordId);
     const encryptedKeyHex = await getEncryptedKeyForPatient(recordId, patientAddress);
+    console.log('🔐 Encrypted key received:', {
+      value: encryptedKeyHex,
+      type: typeof encryptedKeyHex,
+      length: encryptedKeyHex?.length
+    });
 
     if (!encryptedKeyHex || encryptedKeyHex === '0x') {
       throw new Error(
@@ -187,6 +188,7 @@ export async function fetchAndDecryptPatientRecord(
       );
     }
 
+    console.log('🔓 Attempting to decrypt AES key...');
     const aesKeyHex = await decryptAESKey(encryptedKeyHex, privateKeyPEM);
 
     const record = await getMedicalRecord(patientAddress, recordId);

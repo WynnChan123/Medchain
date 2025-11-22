@@ -11,9 +11,22 @@ const router = express.Router();
 router.use(fileUpload());
 router.use(express.json({ limit: '50mb' })); // For encrypted data
 
+// In-memory cache for ABIs
+const abiCache = new Map();
+const CACHE_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
+
 router.get('/getABI/:address', async (req, res) => {
   try {
     const { address } = req.params;
+    const addressLower = address.toLowerCase();
+    
+    // Check cache first
+    const cached = abiCache.get(addressLower);
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      console.log(`✅ Returning cached ABI for ${address}`);
+      return res.status(200).json({ abi: cached.abi });
+    }
+
     const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY;
     const chainid = 11155111; // Sepolia
 
@@ -43,6 +56,14 @@ router.get('/getABI/:address', async (req, res) => {
     }
 
     const abi = JSON.parse(data.result);
+    
+    // Cache the ABI
+    abiCache.set(addressLower, {
+      abi,
+      timestamp: Date.now()
+    });
+    console.log(`Cached ABI for ${address}`);
+    
     return res.status(200).json({ abi });
   } catch (error) {
     console.error('Error fetching ABI:', error);

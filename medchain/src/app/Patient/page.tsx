@@ -1,18 +1,19 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Upload, Settings, Eye, FileText, Plus, X, Clock, Share2 } from 'lucide-react';
+import { Settings, Eye, FileText, Clock, Share2 } from 'lucide-react';
 import useStore from '@/store/userStore';
-import FileUploadField from '@/components/FileUploadField';
 import ActionCard from '@/components/ActionCard';
 import RoleUpgradeModal from '@/components/RoleUpgradeModal';
-import { BigNumber, ethers } from 'ethers';
-import { getAdminPublicKey, getPatientRecordIDs, getRole } from '@/lib/integration';
+import { ethers } from 'ethers';
+import { getAdminPublicKey, getPatientRecordIDs, getRole, checkWhoHasAccess } from '@/lib/integration';
 import { UserRole } from '../../../utils/userRole';
 import { generateAndRegisterAdminKey } from '@/lib/adminKeys';
 import { generateAndRegisterPatientKey, getPatientPublicKey } from '@/lib/patientKeys';
 import PatientRecordViewerModal from '@/components/PatientRecordViewerModal';
 import { fetchAndDecryptPatientRecord } from '@/lib/decryption';
+import ShareMedicalRecordModal from '@/components/ShareMedicalRecordModal';
+import SharedDocumentsTable from '@/components/SharedDocumentsTable';
 
 interface medicalDocuments{
   recordId: string;
@@ -30,6 +31,12 @@ interface medicalDocuments{
   };
 }
 
+interface SharedRecord {
+  provider: string;
+  address: string;
+  recordId: string;
+}
+
 
 const PatientDashboard = () => {
   const [selectedRole, setSelectedRole] = useState('');
@@ -44,43 +51,70 @@ const PatientDashboard = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [hasPublicKey, setHasPublicKey] = useState<boolean>(false);
-  const [selectedDocument, setSelectedDocument] = useState<medicalDocuments>();
+  const [selectedDocument, setSelectedDocument] = useState<medicalDocuments | undefined>();
+  const [isShareModalOpen, setShareModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState('');
+  const [sharedWith, setSharedWith] = useState<SharedRecord[]>([]);
+  const [loadingShared, setLoadingShared] = useState(false);
 
-  useEffect(() => {
-    const init = async () => {
-      if (!window.ethereum) {
-        return;
-      }
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const signer = provider.getSigner();
-      const userAddress = await signer.getAddress();
-      const userRole = await getRole(userAddress);
+useEffect(() => {
+  const init = async () => {
+    if (!window.ethereum) {
+      return;
+    }
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const signer = provider.getSigner();
+    const userAddress = await signer.getAddress();
+    const userRole = await getRole(userAddress);
 
-      console.log('User role :', userRole);
+    console.log('User role:', userRole);
 
-      if (userRole === UserRole.Admin) {
-        setSecondRole('Admin');
-        const publicKey = await getAdminPublicKey(userAddress);
-        if (!publicKey) {
-          await generateAndRegisterAdminKey();
-          setHasPublicKey(true);
-        } else {
-          setHasPublicKey(true);
-        }
+    if (userRole === UserRole.Admin) {
+      setSecondRole('Admin');
+      
+      // Check BOTH on-chain public key AND local private key
+      const localPrivateKey = localStorage.getItem('adminPrivateKey');
+      const onChainPublicKey = await getAdminPublicKey(userAddress);
+      
+      if (!localPrivateKey || !onChainPublicKey) {
+        console.log('Missing keys - regenerating...');
+        console.log('Has local private key:', !!localPrivateKey);
+        console.log('Has on-chain public key:', !!onChainPublicKey);
+        
+        await generateAndRegisterAdminKey();
+        setHasPublicKey(true);
       } else {
-        const publicKey = await getPatientPublicKey(userAddress);
-        if (!publicKey) {
-          await generateAndRegisterPatientKey();
-          setHasPublicKey(true);
-        } else {
-          setHasPublicKey(true);
-        }
-        await fetchMedicalRecords(userAddress);
+        console.log('✅ Both keys found');
+        setHasPublicKey(true);
       }
-    };
+    } else {
+      // Check BOTH on-chain public key AND local private key for patient
+      const localPrivateKey = localStorage.getItem('patientPrivateKey');
+      const onChainPublicKey = await getPatientPublicKey(userAddress);
+      
+      if (!localPrivateKey || !onChainPublicKey) {
+        console.log('Missing patient keys - regenerating...');
+        console.log('Has local private key:', !!localPrivateKey);
+        console.log('Has on-chain public key:', !!onChainPublicKey);
+        
+        await generateAndRegisterPatientKey();
+        setHasPublicKey(true);
+      } else {
+        console.log('✅ Both patient keys found');
+        setHasPublicKey(true);
+      }
+      
+      // Only try to fetch records if we have the private key
+      if (localStorage.getItem('patientPrivateKey')) {
+        await fetchMedicalRecords(userAddress);
+      } else {
+        console.warn('Skipping record fetch - no private key available');
+      }
+    }
+  };
 
-    init();
-  }, []);
+  init();
+}, []);
 
   useEffect(() => {
     // Get wallet address from your Connect component or Web3 provider
@@ -101,39 +135,96 @@ const PatientDashboard = () => {
     }
   }, []);
 
-  const handleViewRecord = (recordID: medicalDocuments) => {
-    setSelectedDocument(recordID);
+  const handleViewRecord = (record: medicalDocuments) => {
+    setSelectedDocument(record);
     setViewDocumentModal(true);
     console.log('Success')
   } 
 
   const fetchMedicalRecords = async(patientAddress: string) => {
     setLoading(true);
-    const recordIDs = await getPatientRecordIDs(patientAddress);
-    const records = await Promise.all(
-      recordIDs.map(async (recordId: string) => {
-        const record = await fetchAndDecryptPatientRecord(patientAddress, recordId);
-        return record;
-      })
-    );
-    console.log('Fetched medical records: ', records);
-    setMedicalRecords(records);
-    setLoading(false);
+    try {
+      const recordIDs = await getPatientRecordIDs(patientAddress);
+      const records = await Promise.all(
+        recordIDs.map(async (recordId: string) => {
+          try {
+            const record = await fetchAndDecryptPatientRecord(patientAddress, recordId);
+            return record;
+          } catch (err) {
+            console.error(`Failed to fetch/decrypt record ${recordId}:`, err);
+            return null;
+          }
+        })
+      );
+      
+      // Filter out failed records
+      const validRecords = records.filter((r) => r !== null) as medicalDocuments[];
+      console.log('Fetched medical records: ', validRecords);
+      setMedicalRecords(validRecords);
+    } catch (error) {
+      console.error("Error fetching medical records:", error);
+      setFetchError("Failed to load medical records.");
+    } finally {
+      setLoading(false);
+    }
   }
-  // const medicalRecords = [
-  //   {
-  //     id: 'LAB_001',
-  //     type: 'Blood Test',
-  //     date: '2025-01-15',
-  //     status: 'Complete',
-  //   },
-  //   { id: 'XRAY_002', type: 'X-Ray', date: '2025-01-10', status: 'Complete' },
-  // ];
 
-  const sharedWith = [
-    { provider: 'Dr. Smith', address: '0x456...789', recordId: 'LAB_001' },
-    { provider: 'Dr. Jones', address: '0x789...abc', recordId: 'XRAY_002' },
-  ];
+  const fetchSharedAccess = async () => {
+    if (medicalRecords.length === 0) return;
+    
+    setLoadingShared(true);
+    try {
+      const allShared: SharedRecord[] = [];
+      
+      for (const record of medicalRecords) {
+        const accessList = await checkWhoHasAccess(record.recordId);
+        
+        for (const address of accessList) {
+          // Skip if address is empty or zero address (though contract should handle this)
+          if (!address || address === ethers.constants.AddressZero) continue;
+          
+          // Try to get role to show a better name
+          let roleName = 'User';
+          try {
+             const r = await getRole(address);
+             if (r === UserRole.HealthcareProvider) roleName = 'Doctor';
+             else if (r === UserRole.Insurer) roleName = 'Insurer';
+             else if (r === UserRole.Patient) roleName = 'Patient';
+             else if (r === UserRole.Admin) roleName = 'Admin';
+          } catch (e) {
+            console.warn(`Could not fetch role for ${address}`);
+          }
+
+          allShared.push({
+            provider: roleName,
+            address: address,
+            recordId: record.recordId
+          });
+        }
+      }
+      
+      setSharedWith(allShared);
+    } catch (error) {
+      console.error("Error fetching shared access:", error);
+    } finally {
+      setLoadingShared(false);
+    }
+  };
+
+  useEffect(() => {
+    if (medicalRecords.length > 0) {
+      fetchSharedAccess();
+    }
+  }, [medicalRecords]);
+
+  const handleShareToUser = async(record: medicalDocuments) => {
+    setSelectedDocument(record);
+    setShareModalOpen(true);
+  }
+
+  const handleShareSuccess = () => {
+    fetchSharedAccess();
+  };
 
   return (
     <div className="space-y-6">
@@ -274,7 +365,7 @@ const PatientDashboard = () => {
       </td>
       <td className="py-3 px-4">
         <button 
-          onClick={() => console.log('Hi')}
+          onClick={() => handleShareToUser(record)}
           className="flex items-center gap-1 text-purple-400 hover:text-purple-300 text-sm transition"
         >
           <Share2 />
@@ -296,47 +387,65 @@ const PatientDashboard = () => {
       {/* Shared With */}
       <div className="bg-gray-900 rounded-lg p-6 border border-gray-700">
         <h3 className="text-white text-lg font-semibold mb-4">Shared With</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-700">
-                <th className="text-left text-gray-400 py-3 px-4 text-sm">
-                  Provider/Insurer
-                </th>
-                <th className="text-left text-gray-400 py-3 px-4 text-sm">
-                  Records Shared
-                </th>
-                <th className="text-left text-gray-400 py-3 px-4 text-sm">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {sharedWith.map((share, idx) => (
-                <tr
-                  key={idx}
-                  className="border-b border-gray-800 hover:bg-gray-800"
-                >
-                  <td className="text-white py-3 px-4 text-sm">
-                    {share.provider}{' '}
-                    <span className="text-gray-500 text-xs">
-                      ({share.address})
-                    </span>
-                  </td>
-                  <td className="text-gray-300 py-3 px-4 text-sm">
-                    {share.recordId}
-                  </td>
-                  <td className="py-3 px-4">
-                    <button className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm">
-                      Revoke
-                    </button>
-                  </td>
+        {loadingShared ? (
+          <div className="text-center py-4 text-gray-400">Loading shared access info...</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-700">
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">
+                    Role
+                  </th>
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">
+                    Address
+                  </th>
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">
+                    Record ID
+                  </th>
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">
+                    Actions
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {sharedWith.length > 0 ? (
+                  sharedWith.map((share, idx) => (
+                    <tr
+                      key={idx}
+                      className="border-b border-gray-800 hover:bg-gray-800"
+                    >
+                      <td className="text-white py-3 px-4 text-sm">
+                        {share.provider}
+                      </td>
+                      <td className="text-gray-300 py-3 px-4 text-sm font-mono">
+                        {share.address.slice(0, 6)}...{share.address.slice(-4)}
+                      </td>
+                      <td className="text-gray-300 py-3 px-4 text-sm">
+                        {share.recordId}
+                      </td>
+                      <td className="py-3 px-4">
+                        <button className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm opacity-50 cursor-not-allowed" title="Revoke not implemented yet">
+                          Revoke
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="text-center py-4 text-gray-500">
+                      You haven't shared any records yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
+      
+      {/* Shared Documents Table */}
+      <SharedDocumentsTable walletAddress={walletAddress} />
 
       {/* Role Upgrade Modal */}
       {isModalOpen && (
@@ -361,6 +470,17 @@ const PatientDashboard = () => {
         onClose={()=> setViewDocumentModal(false)}
         recordId={selectedDocument?.recordId ?? null}
         patientAddress={walletAddress}
+        />
+      )}
+
+      {isShareModalOpen && selectedDocument && (
+        <ShareMedicalRecordModal 
+          isOpen={isShareModalOpen}
+          onClose={() => setShareModalOpen(false)}
+          selectedUser={selectedUser}
+          setSelectedPatient={setSelectedUser}
+          record = {selectedDocument}
+          onSuccess={handleShareSuccess}
         />
       )}
     </div>
