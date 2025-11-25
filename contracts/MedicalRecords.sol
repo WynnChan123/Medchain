@@ -20,13 +20,16 @@ contract MedicalRecordsManagement is Med2ChainStructs {
     //map address of patient to the recordIDs
     mapping(address => string[]) public patientRecordIDs;
 
+    //map address of doctor to the record they created
+    mapping(address => MedicalRecord[]) public doctorMedicalRecord;
+
     // Reference to user management contract
     address public userManagementContract;
 
     address[] private patientList;
     
     event RecordUpdated(address indexed patientAddress, address indexed updatedBy, string medicalRecordID, string newCid, string updateReason, uint timestamp);
-    event RecordAdded(address indexed patientAddress, address indexed doctor, string medicalRecordID, string cid, uint timestamp);
+    event RecordAdded(address indexed patientAddress, address indexed doctor, string medicalRecordID, string cid, string recordType, uint timestamp);
     event KeyStored(address indexed user, string medicalRecordID, uint timestamp);
 
     constructor(address _userManagementContract) {
@@ -37,7 +40,8 @@ contract MedicalRecordsManagement is Med2ChainStructs {
         address patientAddress,
         string memory medicalRecordID,
         string calldata cid,
-        bytes calldata encryptedKeyForPatient
+        bytes calldata encryptedKeyForPatient,
+        string memory recordType
     ) external {
         require(IUserManagement(userManagementContract).getUserRole(msg.sender) == userRole.HealthcareProvider, "Only doctors can add records");
         require(IUserManagement(userManagementContract).getUserRole(patientAddress) == userRole.Patient, "Target must be a patient");
@@ -47,15 +51,29 @@ contract MedicalRecordsManagement is Med2ChainStructs {
         patientMedicalRecord[patientAddress][medicalRecordID] = MedicalRecord({
             patientAddress: patientAddress,
             medicalRecordID: medicalRecordID,
-            cid: cid
+            cid: cid,
+            recordType: recordType,
+            createdAt: block.timestamp
         });
 
         encryptedKeys[medicalRecordID][patientAddress] = encryptedKeyForPatient;
         patientRecordIDs[patientAddress].push(medicalRecordID);
+        doctorMedicalRecord[msg.sender].push(MedicalRecord({
+            patientAddress: patientAddress,
+            medicalRecordID: medicalRecordID,
+            cid: cid,
+            recordType: recordType,
+            createdAt: block.timestamp
+        }));
 
         recordCount[patientAddress]++;
 
-        emit RecordAdded(patientAddress, msg.sender, medicalRecordID, cid, block.timestamp);
+        emit RecordAdded(patientAddress, msg.sender, medicalRecordID, cid, recordType, block.timestamp);
+    }
+
+    function getCreatedRecords(address doctorAddress) external view returns (MedicalRecord[] memory){
+        require(IUserManagement(userManagementContract).getUserRole(msg.sender) == userRole.HealthcareProvider, "Only doctor are allowed to get their own created records");
+        return doctorMedicalRecord[doctorAddress];
     }
 
     function updateRecord(

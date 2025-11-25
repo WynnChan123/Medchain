@@ -58,33 +58,34 @@ const Dashboard = () => {
 
       // Check and generate admin public key
       if (userRole == UserRole.Admin) {
-        // try{
-        //   console.log('Forcing key regeneration for NodeRSA compatibility...');
-        //   localStorage.removeItem('adminPrivateKey'); // Clear old key
-          
-        //   const publicKey = await generateAndRegisterAdminKey();
-        //   console.log('New NodeRSA keys generated and registered');
-        //   setHasPublicKey(true);
-        // }catch(error){
-        //   console.error('Error with admin key', error);
-        //   setHasPublicKey(false);
-        // }
+        const { hasPrivateKey } = await import('@/lib/keyStorage');
         const publicKey = await getAdminPublicKey(address);
-        if (!publicKey) {
+        const hasLocalKey = await hasPrivateKey("adminPrivateKey");
+
+        if (!publicKey && !hasLocalKey) {
           console.log('No public key generated has been generated for admin, creating one...');
           await generateAndRegisterAdminKey();
           console.log('Generated a public key for admin');
           setHasPublicKey(true);
+        } else if (publicKey && !hasLocalKey) {
+          console.error("❌ CRITICAL: Public key exists but private key is missing.");
+          // For development/testing: Regenerate keys to allow proceeding
+          console.log("⚠️ Regenerating admin keys to restore access (Old data will be lost)");
+          await generateAndRegisterAdminKey();
+          setHasPublicKey(true);
+        } else if (publicKey && hasLocalKey) {
+           console.log('Admin has valid keypair');
+           setHasPublicKey(true);
         } else {
-          const trimKey = publicKey.trim();
-          if (trimKey.startsWith('-----BEGIN PUBLIC KEY-----')) {
-            console.log('Admin already has an existing public key');
-            setHasPublicKey(true);
-          } else {
-            console.log('Converting key to PEM format');
-            await generateAndRegisterAdminKey();
-            setHasPublicKey(true);
-          }
+           // Case: No public key but has local key? Rare/Weird.
+           // Maybe register the public key? But we can't export it from non-extractable private key easily unless we stored public key too.
+           // For now, assume if we have private key, we probably registered it.
+           // Or we can just regenerate if public key is missing on chain (but that wipes local key).
+           if (!publicKey) {
+              console.log('Local key exists but not on-chain. Regenerating to ensure consistency.');
+              await generateAndRegisterAdminKey();
+              setHasPublicKey(true);
+           }
         }
       }
 

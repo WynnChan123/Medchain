@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Eye, FileText, Loader2 } from 'lucide-react';
 import { getSharedRecordsWithDetails } from '@/lib/integration';
+import { getUsernamesByWallets } from '@/lib/userUtils';
 import PatientRecordViewerModal from './PatientRecordViewerModal';
 import { ethers } from 'ethers';
 
@@ -29,6 +30,7 @@ const SharedDocumentsTable: React.FC<SharedDocumentsTableProps> = ({ walletAddre
   const [selectedRecord, setSelectedRecord] = useState<SharedRecord | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [fullAddress, setFullAddress] = useState('');
+  const [usernames, setUsernames] = useState<Map<string, string>>(new Map());
 
     // Get the full wallet address from MetaMask
   useEffect(() => {
@@ -59,6 +61,13 @@ const SharedDocumentsTable: React.FC<SharedDocumentsTableProps> = ({ walletAddre
       setLoading(true);
       const fetchedRecords = await getSharedRecordsWithDetails(fullAddress);
       setRecords(fetchedRecords);
+      
+      // Fetch usernames for all patient addresses
+      const patientAddresses = fetchedRecords.map(r => r.patientAddress);
+      if (patientAddresses.length > 0) {
+        const usernameMap = await getUsernamesByWallets(patientAddresses);
+        setUsernames(usernameMap);
+      }
     } catch (error) {
       console.error('Error fetching shared records:', error);
     } finally {
@@ -116,7 +125,10 @@ const SharedDocumentsTable: React.FC<SharedDocumentsTableProps> = ({ walletAddre
               {records.map((record, idx) => (
                 <tr key={`${record.recordId}-${idx}`} className="border-b border-gray-800 hover:bg-gray-800">
                   <td className="text-white py-3 px-4 text-sm font-mono">
-                    {record.patientAddress.slice(0, 6)}...{record.patientAddress.slice(-4)}
+                    {usernames.get(record.patientAddress) 
+                      ? `${record.patientAddress.slice(0, 6)}...${record.patientAddress.slice(-4)} (${usernames.get(record.patientAddress)})`
+                      : `${record.patientAddress.slice(0, 6)}...${record.patientAddress.slice(-4)}`
+                    }
                   </td>
                   <td className="text-gray-300 py-3 px-4 text-sm">
                     {record.metadata?.recordType || 'Unknown'}

@@ -6,11 +6,35 @@ import useStore from '@/store/userStore';
 import FileUploadField from '@/components/FileUploadField';
 import ActionCard from '@/components/ActionCard';
 import RoleUpgradeModal from '@/components/RoleUpgradeModal';
-import { ethers } from 'ethers';
-import { getAdminPublicKey, getRole } from '@/lib/integration';
+import { BigNumber, ethers } from 'ethers';
+import { getAdminPublicKey, getCreatedRecords, getRole, getSharedRecordsWithDetails, verifyRSAKeyPair } from '@/lib/integration';
 import { UserRole } from '../../../utils/userRole';
 import { generateAndRegisterAdminKey } from '@/lib/adminKeys';
 import SharedDocumentsTable from '@/components/SharedDocumentsTable';
+import PatientRecordViewerModal from '@/components/PatientRecordViewerModal';
+
+interface SharedRecord {
+  recordId: string;
+  patientAddress: string;
+  metadata: {
+    recordType: string;
+    timestamp: any;
+    [key: string]: any;
+  };
+  file: {
+    name: string;
+    type: string;
+  };
+  sharedTimestamp?: any;
+}
+
+interface MedicalRecord{
+  medicalRecordID: string;
+  recordType: string;
+  createdAt: BigNumber;
+  cid: string;
+  patientAddress: string;
+}
 
 const HealthcareProviderDashboard = () => {
   const [selectedRole, setSelectedRole] = useState('');
@@ -19,45 +43,116 @@ const HealthcareProviderDashboard = () => {
   const role = useStore((state) => state.role);
   const [secondRole, setSecondRole] = useState('');
   const [hasPublicKey, setHasPublicKey] = useState<boolean>(false);
-  const [sharedRecords, setSharedRecords] = useState([]);
-  const [createdRecords, setCreatedRecords] = useState([]);
+  const [sharedRecords, setSharedRecords] = useState<SharedRecord[]>([]);
+  const [createdRecords, setCreatedRecords] = useState<MedicalRecord[]>([]);
+  const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
 
   useEffect(() => {
     const init = async () => {
-      if (!window.ethereum) {
-        return;
-      }
+      if (!window.ethereum) return;
+
       const provider = new ethers.providers.Web3Provider(window.ethereum);
       const signer = provider.getSigner();
       const userAddress = await signer.getAddress();
       const userRole = await getRole(userAddress);
 
-      console.log('User role :', userRole);
+      console.log("User role:", userRole);
 
-      if (userRole == UserRole.HealthcareProvider) {
-        setSecondRole('Healthcare Provider');
-        const publicKey = await getAdminPublicKey(userAddress);
-        const localPrivateKey = localStorage.getItem('adminPrivateKey');
-        
-        if (!publicKey || !localPrivateKey) {
-          console.log('Key missing (local or on-chain), generating new key...');
-          if (!localPrivateKey && publicKey) {
-             console.warn('Public key exists on-chain but private key is missing locally. Regenerating...');
-          }
+      if (userRole !== UserRole.HealthcareProvider) {
+        console.log("User is patient only");
+        return;
+      }
+
+      setSecondRole("Healthcare Provider");
+
+      // 1️⃣ Fetch keys
+      const onChainPublicKey = await getAdminPublicKey(userAddress);
+      
+      // Dynamic import to avoid SSR issues and circular dependencies if any
+      const { hasPrivateKey } = await import('@/lib/keyStorage');
+      
+      // Check for both admin and patient keys (upgraded users might have patientPrivateKey)
+      let localKeyId = "adminPrivateKey";
+      let hasLocalKey = await hasPrivateKey(localKeyId);
+
+      if (!hasLocalKey) {
+        // Fallback: Check if they have a patient key (e.g. they were just upgraded)
+        const hasPatientKey = await hasPrivateKey("patientPrivateKey");
+        if (hasPatientKey) {
+          console.log("Found patientPrivateKey, using it for Healthcare Provider.");
+          localKeyId = "patientPrivateKey";
+          hasLocalKey = true;
+        }
+      }
+
+      console.log("Fetched on-chain public key:", onChainPublicKey);
+      console.log(`Has local private key (${localKeyId}):`, hasLocalKey);
+
+      if (hasLocalKey && onChainPublicKey) {
+        // Check if on-chain key matches our local public key (if stored)
+        const localPublicKey = localStorage.getItem('adminPublicKey');
+        if (localPublicKey && localPublicKey.trim() !== onChainPublicKey.trim()) {
+            console.warn("⚠️ On-chain public key does not match local public key.");
+            console.warn("This likely means the blockchain node is stale or the key was updated recently.");
+            console.warn("Skipping verification to avoid regeneration loop.");
+            setHasPublicKey(true);
+        } else {
+            const isValid = await verifyRSAKeyPair(onChainPublicKey, localKeyId);
+
+            if (!isValid) {
+              console.error("❌ RSA keypair verification failed. Keys mismatch.");
+              console.log("⚠️ Auto-regenerating keys to restore access (Old data will be lost)");
+              
+              // Regenerate and register new admin key
+              await generateAndRegisterAdminKey();
+              setHasPublicKey(true);
+              alert("Your keys were mismatched and have been automatically regenerated. Old encrypted data is no longer accessible.");
+              return;
+            }
+        }
+      }
+
+      if (onChainPublicKey === undefined || onChainPublicKey === null) {
+          console.log("⚠ Public key not loaded yet — do NOT generate new keys.");
+          return;
+      }
+
+      if (!onChainPublicKey && !hasLocalKey) {
           await generateAndRegisterAdminKey();
           setHasPublicKey(true);
-          console.log('Successfully generated a new key');
-        } else {
-          console.log('Doctor already has a public key and local private key');
-          setHasPublicKey(true);
-        }
-      } else {
-        console.log('User is only a patient');
+          console.log("✅ Generated and registered new admin keypair.");
+      }
+
+      if (onChainPublicKey && !hasLocalKey) {
+        console.error("❌ CRITICAL: Public key exists but private key is missing.");
+        
+        // Auto-regenerate for testing/dev convenience (WARNING: Data Loss)
+        console.log("⚠️ Regenerating keys to restore access (Old data will be lost)");
+        await generateAndRegisterAdminKey();
+        setHasPublicKey(true);
+        return;
+      }
+
+      if (onChainPublicKey && hasLocalKey) {
+        console.log("✔ Valid keypair found locally and on-chain.");
+        setHasPublicKey(true);
+      }
+
+      // 3️⃣ Fetch shared records *only when private key is present*
+      try {
+        console.log("Fetching shared records…");
+        const records = await getSharedRecordsWithDetails(userAddress);
+        setSharedRecords(records);
+      } catch (err) {
+        console.error("❌ Failed to fetch shared records:", err);
+        console.warn("This is usually due to mismatched RSA keys.");
       }
     };
 
     init();
   }, []);
+
 
   useEffect(() => {
     // Get wallet address from your Connect component or Web3 provider
@@ -75,16 +170,29 @@ const HealthcareProviderDashboard = () => {
     }
   }, []);
 
-  // Mock data - replace with actual blockchain data
-  const medicalRecords = [
-    {
-      id: 'LAB_001',
-      type: 'Blood Test',
-      date: '2025-01-15',
-      status: 'Complete',
-    },
-    { id: 'XRAY_002', type: 'X-Ray', date: '2025-01-10', status: 'Complete' },
-  ];
+  useEffect(() => {
+    if (walletAddress) {
+      fetchMedicalRecords();
+    }
+  }, [walletAddress]);
+
+  const fetchMedicalRecords = async()=> {
+    console.log('My wallet address: ', walletAddress);
+    try {
+      const records = await getCreatedRecords(walletAddress);
+      console.log('My records created (RAW): ', records);
+      if (records && records.length > 0) {
+        console.log('First record keys:', Object.keys(records[0]));
+        console.log('First record values:', records[0]);
+        console.log('First record patient:', records[0].patient);
+        console.log('First record patientAddress:', records[0].patientAddress);
+        console.log('First record [4]:', records[0][4]); // Check if it's at a specific index
+      }
+      setCreatedRecords(records);
+    } catch (error) {
+      console.error('Error fetching created records:', error);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -151,13 +259,16 @@ const HealthcareProviderDashboard = () => {
           </button>
         </div>
 
-        {medicalRecords.length > 0 ? (
+        {createdRecords.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-700">
                   <th className="text-left text-gray-400 py-3 px-4 text-sm">
                     Record ID
+                  </th>
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">
+                    Patient
                   </th>
                   <th className="text-left text-gray-400 py-3 px-4 text-sm">
                     Type
@@ -171,24 +282,22 @@ const HealthcareProviderDashboard = () => {
                 </tr>
               </thead>
               <tbody>
-                {medicalRecords.map((record) => (
+                {createdRecords.map((record) => (
                   <tr
-                    key={record.id}
+                    key={record.medicalRecordID}
                     className="border-b border-gray-800 hover:bg-gray-800"
                   >
                     <td className="text-white py-3 px-4 text-sm">
-                      {record.id}
+                      {record.medicalRecordID}
                     </td>
                     <td className="text-gray-300 py-3 px-4 text-sm">
-                      {record.type}
+                      {record.patientAddress ? `${record.patientAddress.slice(0, 6)}...${record.patientAddress.slice(-4)}` : 'Unknown'}
                     </td>
                     <td className="text-gray-300 py-3 px-4 text-sm">
-                      {record.date}
+                      {record.recordType}
                     </td>
-                    <td className="py-3 px-4">
-                      <button className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm">
-                        View
-                      </button>
+                    <td className="text-gray-300 py-3 px-4 text-sm">
+                      {new Date(record.createdAt.toNumber() * 1000).toLocaleString()}
                     </td>
                   </tr>
                 ))}
@@ -220,6 +329,19 @@ const HealthcareProviderDashboard = () => {
           // }}
           selectedRole={selectedRole}
           setSelectedRole={setSelectedRole}
+        />
+      )}
+
+      {/* View Record Modal */}
+      {isViewModalOpen && selectedRecord && (
+        <PatientRecordViewerModal
+          isOpen={isViewModalOpen}
+          onClose={() => {
+            setIsViewModalOpen(false);
+            setSelectedRecord(null);
+          }}
+          recordId={selectedRecord.medicalRecordID}
+          patientAddress={selectedRecord.patientAddress}
         />
       )}
     </div>

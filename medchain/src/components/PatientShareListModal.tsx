@@ -112,7 +112,7 @@ const handleShare = async() => {
     if (!patientPublicKey) throw new Error('Patient has no public key registered');
 
     // encryptWithPublicKey now returns hex directly
-    const encryptedKeyForPatient = encryptWithPublicKey(aesKeyHex, patientPublicKey);
+    const encryptedKeyForPatient = await encryptWithPublicKey(aesKeyHex, patientPublicKey);
     console.log('Encrypted key for patient:', encryptedKeyForPatient);
 
     // Verify format
@@ -121,7 +121,7 @@ const handleShare = async() => {
     }
 
     // add medical record on chain
-    await addMedicalRecord(selectedPatient, medicalRecordID, cid, encryptedKeyForPatient);
+    await addMedicalRecord(selectedPatient, medicalRecordID, cid, encryptedKeyForPatient, recordType);
     console.log('Successfully shared record with patient: ', selectedPatient);
     print('Record shared successfully!', 'success', () => onClose());
   } catch(error) {

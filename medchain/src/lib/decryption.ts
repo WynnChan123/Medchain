@@ -1,12 +1,13 @@
 // lib/decryption.ts
 import CryptoJS from 'crypto-js';
-import NodeRSA from 'node-rsa';
 import {
   getEncryptedKey,
   getEncryptedKeyForPatient,
   getMedicalRecord,
   readUpgradeContract,
 } from './integration';
+import { getPrivateKey } from './keyStorage';
+import { decryptAESKeyWithPrivateKey } from './webCryptoUtils';
 
 const PINATA_GATEWAY = process.env.NEXT_PUBLIC_PINATA_GATEWAY_URL;
 const PINATA_GATEWAY_TOKEN = process.env.NEXT_PUBLIC_PINATA_GATEWAY_TOKEN;
@@ -16,7 +17,7 @@ const PINATA_GATEWAY_TOKEN = process.env.NEXT_PUBLIC_PINATA_GATEWAY_TOKEN;
  */
 export async function decryptAESKey(
   encryptedKeyHex: string,
-  privateKeyPEM: string
+  keyId: string = 'patientPrivateKey' // Default to patient key, but can be 'adminPrivateKey'
 ): Promise<string> {
   try {
     if (!encryptedKeyHex || encryptedKeyHex === '0x') {
@@ -24,26 +25,17 @@ export async function decryptAESKey(
     }
     
     console.log('Decrypting AES key...');
+    console.log('Raw encrypted key hex:', encryptedKeyHex);
     
-    // Ensure we have a clean hex string (remove 0x prefix if present)
-    const cleanHex = encryptedKeyHex.startsWith('0x') ? encryptedKeyHex.slice(2) : encryptedKeyHex;
-    
-    // Convert hex string to bytes
-    const encryptedBytes = new Uint8Array(
-      cleanHex.match(/.{1,2}/g)!
-        .map((byte) => parseInt(byte, 16))
-    );
+    // 1. Get private key handle from IndexedDB
+    const privateKey = await getPrivateKey(keyId);
+    if (!privateKey) {
+      throw new Error(`Private key not found in IndexedDB for ID: ${keyId}. Please generate keys first.`);
+    }
 
-    // Convert bytes to base64 (node-rsa expects base64)
-    const encryptedBase64 = btoa(String.fromCharCode(...encryptedBytes));
-
-    // Use node-rsa to decrypt (same library used for encryption)
-    const rsaPrivateKey = new NodeRSA(privateKeyPEM);
-    // Set encryption scheme to PKCS1 padding (must match encryption)
-    rsaPrivateKey.setOptions({ encryptionScheme: 'pkcs1' });
-    
-    const decryptedAESKey = rsaPrivateKey.decrypt(encryptedBase64, 'utf8');
-
+    // 2. Decrypt using WebCrypto
+    const decryptedAESKey = await decryptAESKeyWithPrivateKey(encryptedKeyHex, privateKey);
+    console.log('AES Key decrypted successfully');
     return decryptedAESKey;
   } catch (error) {
     console.error('Error decrypting AES key:', error);
@@ -82,27 +74,17 @@ export async function fetchAndDecryptDocuments(requestId: number) {
   try {
     console.log('Starting decryption for request:', requestId);
 
-    // 1. Get admin's private key from localStorage
-    const privateKeyPEM = localStorage.getItem('adminPrivateKey');
-    if (!privateKeyPEM) {
-      throw new Error(
-        'Admin private key not found. Please generate keys first.'
-      );
-    }
-    console.log('Private key found');
-    console.log('PRIVATE KEY', privateKeyPEM);
-
-    // 2. Get encrypted AES key from contract
+    // 1. Get encrypted AES key from contract
     console.log('Fetching encrypted key from contract...');
     const encryptedKeyHex = await getEncryptedKey(requestId);
     console.log('Encrypted key (hex):', encryptedKeyHex);
 
-    // 3. Decrypt the AES key
+    // 2. Decrypt the AES key (using admin private key)
     console.log('Decrypting AES key...');
-    const aesKeyHex = await decryptAESKey(encryptedKeyHex, privateKeyPEM);
+    const aesKeyHex = await decryptAESKey(encryptedKeyHex, 'adminPrivateKey');
     console.log('AES key decrypted successfully');
 
-    // 4. Get the CID from the request
+    // 3. Get the CID from the request
     console.log('Fetching request data...');
     const request = await getRequestById(requestId);
     console.log('Admin addresses', request.adminAddresses);
@@ -111,7 +93,7 @@ export async function fetchAndDecryptDocuments(requestId: number) {
     const cids = JSON.parse(request.cid); // Array of {name, cid}
     console.log('Parsed CIDs:', cids);
 
-    // 5. Fetch and decrypt each document from IPFS
+    // 4. Fetch and decrypt each document from IPFS
     const decryptedDocuments = await Promise.all(
       cids.map(async (cidObj: { name: string; cid: string }) => {
         try {
@@ -167,13 +149,6 @@ export async function fetchAndDecryptPatientRecord(
       throw new Error('Patient address is required to fetch records');
     }
 
-    const privateKeyPEM = localStorage.getItem('patientPrivateKey');
-    if (!privateKeyPEM) {
-      throw new Error(
-        'Patient private key not found. Please generate or import your private key to view records.'
-      );
-    }
-
     console.log('🔐 Fetching encrypted key for record:', recordId);
     const encryptedKeyHex = await getEncryptedKeyForPatient(recordId, patientAddress);
     console.log('🔐 Encrypted key received:', {
@@ -189,7 +164,8 @@ export async function fetchAndDecryptPatientRecord(
     }
 
     console.log('🔓 Attempting to decrypt AES key...');
-    const aesKeyHex = await decryptAESKey(encryptedKeyHex, privateKeyPEM);
+    // Decrypt using patient private key
+    const aesKeyHex = await decryptAESKey(encryptedKeyHex, 'patientPrivateKey');
 
     const record = await getMedicalRecord(patientAddress, recordId);
     const cid = record?.cid;

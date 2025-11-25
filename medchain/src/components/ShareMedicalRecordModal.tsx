@@ -65,16 +65,26 @@ const ShareMedicalRecordModal = ({ isOpen, onClose, selectedUser, setSelectedPat
     try{
       setLoading(true);
       const patientEncryptedKey = await getEncryptedKeyForPatient(record.recordId, userAddress);
-      const privateKeyPEM = localStorage.getItem('patientPrivateKey');
-      if(!privateKeyPEM){
+      
+      // Check if private key exists in IndexedDB
+      const { hasPrivateKey } = await import('@/lib/keyStorage');
+      const hasKey = await hasPrivateKey('patientPrivateKey');
+      
+      if(!hasKey){
         setError("Private key not found. Please ensure you are logged in correctly.");
         setLoading(false);
         return;
       }
-      const aesKey = await decryptAESKey(patientEncryptedKey, privateKeyPEM);
+      
+      // Pass the ID 'patientPrivateKey', not the key itself
+      const aesKey = await decryptAESKey(patientEncryptedKey, 'patientPrivateKey');
 
       const recipientPublicKey = await getAdminPublicKey(selectedUser);
-      const encryptedKeyForRecipient = encryptWithPublicKey(aesKey, recipientPublicKey);
+      const encryptedKeyForRecipient = await encryptWithPublicKey(aesKey, recipientPublicKey);
+
+      if (!encryptedKeyForRecipient || encryptedKeyForRecipient === '0x' || encryptedKeyForRecipient.length <= 2) {
+        throw new Error("Failed to generate a valid encrypted key for the recipient. Please try again.");
+      }
 
       console.log('GOT USER ADDRESS: ', userAddress);
       await grantAccess(userAddress, selectedUser, record.recordId);

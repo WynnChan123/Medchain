@@ -1,41 +1,26 @@
-import NodeRSA from 'node-rsa';
 import { writeUpgradeContract } from "./integration";
+import { generateRSAKeyPair, exportPublicKeyToPEM } from "./webCryptoUtils";
+import { storePrivateKey } from "./keyStorage";
 
 export async function generateAndRegisterAdminKey() {
   try {
-    console.log('Generating RSA key pair for admin...');
+    console.log('Generating RSA key pair for admin (WebCrypto)...');
     
-    // 1. Generate RSA key pair
-    const key = new NodeRSA({ b: 2048 });
-    key.setOptions({ encryptionScheme: 'pkcs1' });
+    // 1. Generate RSA key pair (non-extractable private key)
+    const keyPair = await generateRSAKeyPair();
     
-    // 2. Export keys in PEM format WITH PROPER LINE BREAKS
-    const publicKeyPEM = key.exportKey('pkcs8-public-pem');   // ← Changed
-    const privateKeyPEM = key.exportKey('pkcs1-private-pem'); // ← Changed
+    // 2. Export public key to PEM for on-chain registration
+    const publicKeyPEM = await exportPublicKeyToPEM(keyPair.publicKey);
     
     console.log('Keys generated successfully');
     console.log('Public key preview:', publicKeyPEM.substring(0, 100) + '...');
-    console.log('Private key preview:', privateKeyPEM.substring(0, 100) + '...');
     
-    // Verify the format includes newlines
-    if (!privateKeyPEM.includes('\n')) {
-      console.error('ERROR: Private key is missing line breaks!');
-      throw new Error('Private key format is incorrect - missing line breaks');
-    }
+    // 3. Store private key handle in IndexedDB
+    await storePrivateKey("adminPrivateKey", keyPair.privateKey);
+    console.log('Admin private key stored in IndexedDB (non-extractable)');
     
-    console.log('✅ Private key format verified (contains newlines)');
-
-    // 3. Store private key locally
-    localStorage.setItem("adminPrivateKey", privateKeyPEM);
-    console.log('Admin private key stored in localStorage');
-    
-    // Verify it was stored correctly
-    const storedKey = localStorage.getItem("adminPrivateKey");
-    if (storedKey && !storedKey.includes('\n')) {
-      console.error('ERROR: Stored key lost its line breaks!');
-      throw new Error('localStorage corrupted the key format');
-    }
-    console.log('✅ Stored key format verified');
+    // Clear any old keys from localStorage to avoid confusion
+    localStorage.removeItem("adminPrivateKey");
 
     // 4. Register public key on-chain
     console.log('Registering public key on blockchain...');
@@ -45,6 +30,10 @@ export async function generateAndRegisterAdminKey() {
     await tx.wait();
 
     console.log("✅ Admin public key registered on-chain successfully!");
+    
+    // Store public key locally to detect stale chain data
+    localStorage.setItem('adminPublicKey', publicKeyPEM);
+    
     return publicKeyPEM;
   } catch (error) {
     console.error('Error in generateAndRegisterAdminKey:', error);

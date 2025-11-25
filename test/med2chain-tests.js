@@ -212,7 +212,8 @@ describe('Healthcare System Contracts', function () {
           await patient.getAddress(),
           recordId,
           'QmEncryptedCidV1',
-          patientKey
+          patientKey,
+          'Blood Test',
         );
 
       const record = await medicalRecords.patientMedicalRecord(
@@ -240,7 +241,8 @@ describe('Healthcare System Contracts', function () {
             await patient.getAddress(),
             recordId,
             'QmHash123',
-            patientKey
+            patientKey,
+            'Blood Test',
           )
       ).to.be.revertedWith('Only doctors can add records');
     });
@@ -255,7 +257,8 @@ describe('Healthcare System Contracts', function () {
           await patient.getAddress(),
           recordId,
           'QmHash123',
-          patientKey
+          patientKey,
+          'Blood Test',
         );
 
       await expect(
@@ -265,7 +268,8 @@ describe('Healthcare System Contracts', function () {
             await patient.getAddress(),
             recordId,
             'QmHash124',
-            patientKey
+            patientKey,
+            'Blood Test',
           )
       ).to.be.revertedWith('Record already exists');
     });
@@ -280,7 +284,8 @@ describe('Healthcare System Contracts', function () {
           await patient.getAddress(),
           recordId,
           'QmHash123',
-          patientKey
+          patientKey,
+          'Blood Test',
         );
 
       const hash1 = await medicalRecords.getRecordHash(
@@ -342,7 +347,8 @@ describe('Healthcare System Contracts', function () {
           await patient.getAddress(),
           recordId, 
           'QmHash123',
-          patientKey
+          patientKey,
+          'Blood Test',
         )
 
       const recordIDs = await medicalRecords.getPatientRecordIDs(await patient.getAddress());
@@ -362,7 +368,8 @@ describe('Healthcare System Contracts', function () {
           await patient.getAddress(),
           recordId1,
           'QmHash123',
-          patientKey
+          patientKey,
+          'Blood Test',
         )
       
       await medicalRecords
@@ -371,7 +378,8 @@ describe('Healthcare System Contracts', function () {
           await patient.getAddress(),
           recordId2,
           'QmHash124',
-          patientKey
+          patientKey,
+          'Blood Test',
         )
 
       const recordIDs = await medicalRecords.getPatientRecordIDs(await patient.getAddress());
@@ -399,7 +407,8 @@ describe('Healthcare System Contracts', function () {
           await patient.getAddress(),
           recordId1,
           'QmHash123',
-          patientKey
+          patientKey,
+          'Blood Test',
         )
       
       await medicalRecords
@@ -408,7 +417,8 @@ describe('Healthcare System Contracts', function () {
         await patient2.getAddress(),
         recordId2,
         'QmHash124',
-        patientKey
+        patientKey,
+        'Blood Test',
         )
 
       const recordIDforPatient1 = await medicalRecords.getPatientRecordIDs(await patient.getAddress());
@@ -430,7 +440,8 @@ describe('Healthcare System Contracts', function () {
           await patient.getAddress(),
           recordId1, 
           'QmHash123',
-          patientKey
+          patientKey,
+          'Blood Test',
         )
 
       await medicalRecords
@@ -439,7 +450,8 @@ describe('Healthcare System Contracts', function () {
           await patient.getAddress(),
           recordId2, 
           'QmHash124',
-          patientKey
+          patientKey,
+          'Blood Test',
         )
       
       const recordCount = await medicalRecords.recordCount(await patient.getAddress());
@@ -451,6 +463,7 @@ describe('Healthcare System Contracts', function () {
     it('Should preserve order of record IDs as they are added', async function () {
       const recordIds = ['LAB_001', 'XRAY_001', 'MRI_001', 'BLOOD_001'];
       const patientKey = ethers.toUtf8Bytes('aes-key-for-patient');
+      const recordType = ['Blood_Test_001', 'Blood_Test_002', 'Blood_Test_003', 'Blood_Test_004']
 
       for (let i = 0; i < recordIds.length; i++) {
         await medicalRecords
@@ -459,7 +472,8 @@ describe('Healthcare System Contracts', function () {
             await patient.getAddress(),
             recordIds[i],
             `QmCid${i}`,
-            patientKey
+            patientKey,
+            recordType[i],
           );
       }
 
@@ -516,7 +530,8 @@ describe('Healthcare System Contracts', function () {
           await patient.getAddress(),
           recordId,
           'QmHash123',
-          patientKey
+          patientKey,
+          'Blood Test',
         );
 
       await medicalRecords
@@ -525,7 +540,8 @@ describe('Healthcare System Contracts', function () {
         await patient.getAddress(),
         recordId2,
         'QmHash124',
-        patientKey
+        patientKey,
+        'Blood Test',
       );
     });
 
@@ -632,7 +648,8 @@ describe('Healthcare System Contracts', function () {
           await patient2.getAddress(),
           recordId2,
           'QmHash124',
-          patient2Key
+          patient2Key,
+          'Blood Test',
         );
 
       // Patient2 grants access to doctor
@@ -701,7 +718,8 @@ describe('Healthcare System Contracts', function () {
           await patient2.getAddress(),
           recordId2,
           'QmHash123',
-          patient2Key
+          patient2Key,
+          'Blood Test',
         );
 
       const recipientKey = ethers.toUtf8Bytes('aes-key-for-doctor');
@@ -1084,7 +1102,8 @@ describe('Healthcare System Contracts', function () {
         await patient2.getAddress(),
         recordId3,
         'QmHash125',
-        patient2Key
+        patient2Key,
+        'Blood Test',
       );
 
     // Both patients grant access to doctor
@@ -1314,7 +1333,8 @@ describe('Healthcare System Contracts', function () {
       await patient2.getAddress(),
       recordId3,
       'QmHash125',
-      patient2Key
+      patient2Key,
+      'Blood Test'
     );
 
     // Grant multiple accesses
@@ -2035,7 +2055,8 @@ describe('Healthcare System Contracts', function () {
           await patient.getAddress(),
           recordId,
           'QmHash123',
-          patientKey
+          patientKey,
+          'Blood Test',
         );
     });
 
@@ -2190,7 +2211,8 @@ describe('Healthcare System Contracts', function () {
           await patient.getAddress(),
           recordId,
           'QmHash123',
-          patientKey
+          patientKey,
+          'Blood Test',
         );
     });
 
@@ -2301,6 +2323,28 @@ describe('Healthcare System Contracts', function () {
           )
       ).to.be.revertedWith('Record does not exist');
     });
+
+    it('Should allow doctors to see the medical records they created', async function () {
+
+      const recordCreated = await medicalRecords
+        .connect(doctor)
+        .getCreatedRecords(await doctor.getAddress())
+ 
+      expect(recordCreated.length).to.equal(1);
+      expect(recordCreated[0].medicalRecordID).to.equal(recordId);
+      expect(recordCreated[0].patientAddress).to.equal(await patient.getAddress());
+      expect(recordCreated[0].cid).to.equal('QmHash123');   
+      expect(recordCreated[0].recordType).to.equal('Blood Test');
+      expect(recordCreated[0].createdAt).to.be.greaterThan(0);
+    });
+
+    it('Should prevent non-doctors from calling getCreatedRecords function', async function(){
+      await expect(
+        medicalRecords
+        .connect(patient)
+        .getCreatedRecords(await patient.getAddress())
+      ).to.be.revertedWith('Only doctor are allowed to get their own created records');
+    })
   });
 
   describe('Edge Cases and Security', function () {
@@ -2340,7 +2384,8 @@ describe('Healthcare System Contracts', function () {
             await patient.getAddress(),
             recordId,
             'QmHash123',
-            patientKey
+            patientKey,
+            'Blood Test',
           )
       ).to.be.revertedWith('Medical record ID required');
     });
@@ -2392,7 +2437,8 @@ describe('Healthcare System Contracts', function () {
           await patient.getAddress(),
           recordId,
           'QmHash123',
-          patientKey
+          patientKey,
+          'Blood Test',
         );
 
       await accessControl

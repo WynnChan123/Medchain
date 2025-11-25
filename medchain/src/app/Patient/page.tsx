@@ -72,13 +72,14 @@ useEffect(() => {
     if (userRole === UserRole.Admin) {
       setSecondRole('Admin');
       
-      // Check BOTH on-chain public key AND local private key
-      const localPrivateKey = localStorage.getItem('adminPrivateKey');
+      // Check BOTH on-chain public key AND local private key (IndexedDB)
+      const { hasPrivateKey } = await import('@/lib/keyStorage');
+      const hasLocalKey = await hasPrivateKey('adminPrivateKey');
       const onChainPublicKey = await getAdminPublicKey(userAddress);
       
-      if (!localPrivateKey || !onChainPublicKey) {
+      if (!hasLocalKey || !onChainPublicKey) {
         console.log('Missing keys - regenerating...');
-        console.log('Has local private key:', !!localPrivateKey);
+        console.log('Has local private key:', hasLocalKey);
         console.log('Has on-chain public key:', !!onChainPublicKey);
         
         await generateAndRegisterAdminKey();
@@ -88,27 +89,50 @@ useEffect(() => {
         setHasPublicKey(true);
       }
     } else {
-      // Check BOTH on-chain public key AND local private key for patient
-      const localPrivateKey = localStorage.getItem('patientPrivateKey');
+      // Check BOTH on-chain public key AND local private key for patient (IndexedDB)
+      const { hasPrivateKey } = await import('@/lib/keyStorage');
+      const hasLocalKey = await hasPrivateKey('patientPrivateKey');
       const onChainPublicKey = await getPatientPublicKey(userAddress);
       
-      if (!localPrivateKey || !onChainPublicKey) {
+      if (!hasLocalKey || !onChainPublicKey) {
         console.log('Missing patient keys - regenerating...');
-        console.log('Has local private key:', !!localPrivateKey);
+        console.log('Has local private key:', hasLocalKey);
         console.log('Has on-chain public key:', !!onChainPublicKey);
         
         await generateAndRegisterPatientKey();
         setHasPublicKey(true);
       } else {
-        console.log('✅ Both patient keys found');
-        setHasPublicKey(true);
+        console.log('✅ Both patient keys found. Verifying match...');
+        
+        // Check if on-chain key matches our local public key (if stored)
+        const localPublicKey = localStorage.getItem('patientPublicKey');
+        if (localPublicKey && localPublicKey.trim() !== onChainPublicKey.trim()) {
+            console.warn("⚠️ On-chain public key does not match local public key.");
+            console.warn("This likely means the blockchain node is stale or the key was updated recently.");
+            console.warn("Skipping verification to avoid regeneration loop.");
+            setHasPublicKey(true);
+        } else {
+            // Verify that the local private key matches the on-chain public key
+            const { verifyRSAKeyPair } = await import('@/lib/integration');
+            const isValid = await verifyRSAKeyPair(onChainPublicKey, 'patientPrivateKey');
+            
+            if (!isValid) {
+                console.error("❌ RSA keypair verification failed. Keys mismatch.");
+                console.log("⚠️ Auto-regenerating keys to restore access (Old data will be lost)");
+                
+                await generateAndRegisterPatientKey();
+                setHasPublicKey(true);
+                alert("Your keys were mismatched and have been automatically regenerated. Old encrypted data is no longer accessible.");
+            } else {
+                console.log('✅ Keypair verified successfully.');
+                setHasPublicKey(true);
+            }
+        }
       }
       
-      // Only try to fetch records if we have the private key
-      if (localStorage.getItem('patientPrivateKey')) {
+      // Only try to fetch records if we have the private key (and it's valid/regenerated)
+      if (hasLocalKey || !hasLocalKey) { // Always try after handling regeneration
         await fetchMedicalRecords(userAddress);
-      } else {
-        console.warn('Skipping record fetch - no private key available');
       }
     }
   };

@@ -40,6 +40,8 @@ abstract contract Med2ChainStructs {
         address patientAddress;
         string medicalRecordID;
         string cid;
+        string recordType;
+        uint256 createdAt;
     }
 
     struct UpdateHistory{

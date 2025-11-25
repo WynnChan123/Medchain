@@ -34,7 +34,7 @@ async function fetchAbiFromEtherscan(address: string): Promise<any> {
   try {
     const addressLower = address.toLowerCase();
     const cacheKey = `${ABI_CACHE_KEY_PREFIX}${addressLower}`;
-    
+
     // Check localStorage cache first
     if (typeof window !== 'undefined') {
       const cached = localStorage.getItem(cacheKey);
@@ -65,17 +65,17 @@ async function fetchAbiFromEtherscan(address: string): Promise<any> {
     }
 
     const data = await response.json();
-    
+
     // Cache the ABI in localStorage
     if (typeof window !== 'undefined' && data.abi) {
       const cacheData: CachedABI = {
         abi: data.abi,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
       localStorage.setItem(cacheKey, JSON.stringify(cacheData));
       console.log(`💾 Cached ABI for ${address} in localStorage`);
     }
-    
+
     return data.abi;
   } catch (error) {
     console.error('Error fetching ABI from backend:', error);
@@ -160,7 +160,7 @@ export async function readMedicalRecordsContract() {
   return new ethers.Contract(MEDICAL_RECORDS_ADDRESS, abi, provider);
 }
 
-export async function writeAccessControlContract(){
+export async function writeAccessControlContract() {
   if (!window.ethereum) throw new Error('MetaMask not found');
   await (window.ethereum as any).request({ method: 'eth_requestAccounts' });
 
@@ -171,7 +171,7 @@ export async function writeAccessControlContract(){
   return new ethers.Contract(ACCESS_CONTROL_ADDRESS, abi, signer);
 }
 
-export async function readAccessControlContract(){
+export async function readAccessControlContract() {
   if (!window.ethereum) throw new Error('MetaMask not found');
   await (window.ethereum as any).request({ method: 'eth_requestAccounts' });
 
@@ -199,7 +199,12 @@ export async function registerUser(
     );
 
     const sender = await contract.signer.getAddress();
-    const tx = await contract.registerUserFromSystem(sender, wallet, encryptedId, role);
+    const tx = await contract.registerUserFromSystem(
+      sender,
+      wallet,
+      encryptedId,
+      role
+    );
     return await tx.wait();
   } catch (error: any) {
     console.error('Error in registering wallet on blockchain:', error);
@@ -262,12 +267,12 @@ export async function shareMedicalRecord(
 ) {
   try {
     const contract = await writeMedicalRecordsContract();
-    
+
     // Ensure hex format
-    const hex = encryptedKeyForRecipient.startsWith("0x")
+    const hex = encryptedKeyForRecipient.startsWith('0x')
       ? encryptedKeyForRecipient
-      : "0x" + encryptedKeyForRecipient;
-    
+      : '0x' + encryptedKeyForRecipient;
+
     const tx = await contract.shareMedicalRecord(
       patient,
       recordId,
@@ -485,7 +490,7 @@ export async function submitRoleUpgradeRequest(
     console.log('Admin public keys:', adminPublicKeys);
     console.log('Number of admins:', selectedAdmins.length);
 
-    const encryptedKeys = selectedAdmins.map((_, i) => {
+    const encryptedKeys = await Promise.all(selectedAdmins.map(async (_, i) => {
       console.log(`[Admin ${i}] Encrypting AES key...`);
       console.log(
         `[Admin ${i}] Public Key:`,
@@ -496,23 +501,13 @@ export async function submitRoleUpgradeRequest(
         throw new Error(`Missing admin public key at index ${i}`);
       }
 
-      const encryptedKey = encryptWithPublicKey(aesKeyHex, adminPublicKeys[i]);
-      console.log(
-        `[Admin ${i}] Encrypted Key (base64 length):`,
-        encryptedKey.length
-      );
-
-      // Convert base64 to bytes properly
-      const binary = atob(encryptedKey);
-      const bytes = ethers.utils.hexlify(
-        Uint8Array.from(binary, (c) => c.charCodeAt(0))
-      );
+      const encryptedKey = await encryptWithPublicKey(aesKeyHex, adminPublicKeys[i]);
       console.log(
         `[Admin ${i}] Encrypted AES Key (hex):`,
-        bytes.substring(0, 20) + '...'
+        encryptedKey.substring(0, 20) + '...'
       );
-      return bytes;
-    });
+      return encryptedKey;
+    }));
     console.log('=== [CHECKPOINT 8] All AES keys encrypted ===');
     console.log('Encrypted keys count:', encryptedKeys.length);
 
@@ -564,18 +559,20 @@ export async function submitRoleUpgradeRequest(
   }
 }
 
-export function encryptWithPublicKey(aesKey: string, adminPublicKey: string): string {
-  const rsaPublicKey = new NodeRSA(adminPublicKey);
-  rsaPublicKey.setOptions({ encryptionScheme: 'pkcs1' });
+export async function encryptWithPublicKey(
+  aesKey: string,
+  adminPublicKey: string
+): Promise<string> {
+  console.log('🔐 encryptWithPublicKey called (WebCrypto)');
+  console.log('AES Key to encrypt:', aesKey);
+  console.log('Public key length:', adminPublicKey.length);
   
-  // Encrypt to base64 first
-  const encryptedBase64 = rsaPublicKey.encrypt(aesKey, 'base64');
-  
-  // Convert to hex for blockchain storage
-  const hex = Buffer.from(encryptedBase64, 'base64').toString('hex');
-  
-  // Return with 0x prefix
-  return '0x' + hex;
+  // Use WebCrypto utility
+  const { encryptAESKeyWithPublicKey } = await import('./webCryptoUtils');
+  const encryptedKeyHex = await encryptAESKeyWithPublicKey(aesKey, adminPublicKey);
+
+  console.log('Encrypted Key Hex:', encryptedKeyHex);
+  return encryptedKeyHex;
 }
 
 export async function approveUpgrade(requestId: number, userToUpgrade: string) {
@@ -808,7 +805,8 @@ export async function addMedicalRecord(
   patientAddress: string,
   medicalRecordID: string,
   cid: string,
-  encryptedKeyForPatient: string
+  encryptedKeyForPatient: string,
+  recordType: string
 ) {
   try {
     const contract = await writeMedicalRecordsContract();
@@ -816,7 +814,8 @@ export async function addMedicalRecord(
       patientAddress,
       medicalRecordID,
       cid,
-      encryptedKeyForPatient
+      encryptedKeyForPatient,
+      recordType
     );
     return await tx.wait();
   } catch (error) {
@@ -860,27 +859,27 @@ export async function getEncryptedKeyForPatient(
   try {
     console.log('🔍 getEncryptedKeyForPatient called with:', {
       medicalRecordID,
-      patientAddress
+      patientAddress,
     });
-    
+
     const contract = await writeMedicalRecordsContract();
-    
+
     console.log('📝 Contract address:', contract.address);
     console.log('📝 Signer address:', await contract.signer.getAddress());
-    
+
     const encryptedKey = await contract.getEncryptedKeyForPatient(
       medicalRecordID,
       patientAddress
     );
-    
+
     console.log('🔑 Encrypted key returned:', {
       value: encryptedKey,
       type: typeof encryptedKey,
       length: encryptedKey?.length,
       isNull: encryptedKey === null,
-      isEmpty: encryptedKey === '0x' || encryptedKey === ''
+      isEmpty: encryptedKey === '0x' || encryptedKey === '',
     });
-    
+
     return encryptedKey;
   } catch (error) {
     console.error("❌ Failed to get patient's encrypted key", error);
@@ -902,128 +901,165 @@ export async function getEncryptedKeyForRecord(
     );
     return encryptedKey;
   } catch (error) {
-    console.error("Failed to get encrypted key for record", error);
+    console.error('Failed to get encrypted key for record', error);
     throw error;
   }
 }
 
 export async function grantAccess(
-  patientAddress: string, 
+  patientAddress: string,
   walletAddress: string,
   medicalRecordID: string
-){
-    try{
-      const contract = await writeAccessControlContract();
-      const tx = await contract.grantAccess(
-        patientAddress,
-        walletAddress,
-        medicalRecordID
-      );
-      await tx.wait();
-      return tx;
-    }catch(error) {
-      console.error('Failed to grant access to other users', error);
-      throw error;
-    }
+) {
+  try {
+    const contract = await writeAccessControlContract();
+    const tx = await contract.grantAccess(
+      patientAddress,
+      walletAddress,
+      medicalRecordID
+    );
+    await tx.wait();
+    return tx;
+  } catch (error) {
+    console.error('Failed to grant access to other users', error);
+    throw error;
   }
+}
 
-  export async function storeEncryptedAESKey(
-    patientAddress: string,
-    recipient: string,
-    recordId: string,
-    encryptedAESKeyHex: string
-  ) {
-    try {
-      const contract = await writeAccessControlContract();
+export async function storeEncryptedAESKey(
+  patientAddress: string,
+  recipient: string,
+  recordId: string,
+  encryptedAESKeyHex: string
+) {
+  try {
+    console.log('💾 storeEncryptedAESKey called');
+    console.log('Patient:', patientAddress);
+    console.log('Recipient:', recipient);
+    console.log('Record ID:', recordId);
+    console.log('Encrypted key (input):', encryptedAESKeyHex);
+    console.log('Encrypted key length:', encryptedAESKeyHex?.length);
+    
+    const contract = await writeAccessControlContract();
 
-      // Ensure it starts with 0x
-      const hex = encryptedAESKeyHex.startsWith("0x")
-        ? encryptedAESKeyHex
-        : "0x" + encryptedAESKeyHex;
+    // Ensure it starts with 0x
+    const hex = encryptedAESKeyHex.startsWith('0x')
+      ? encryptedAESKeyHex
+      : '0x' + encryptedAESKeyHex;
 
-      const tx = await contract.storeEncryptedAESKey(
-        patientAddress,
-        recipient,
-        recordId,
-        hex
-      );
-      return await tx.wait();
-    } catch (error) {
-      console.error("Failed to store encrypted AES key");
-      throw error;
-    }
+    console.log('Encrypted key (final):', hex);
+    console.log('Final length:', hex.length);
+    console.log('Preview:', hex.substring(0, 52) + '...');
+
+    const tx = await contract.storeEncryptedAESKey(
+      patientAddress,
+      recipient,
+      recordId,
+      hex
+    );
+    console.log('✅ Transaction sent, waiting for confirmation...');
+    const receipt = await tx.wait();
+    console.log('✅ Encrypted key stored successfully');
+    return receipt;
+  } catch (error) {
+    console.error('❌ Failed to store encrypted AES key:', error);
+    throw error;
   }
+}
 
-
-  export async function getSharedRecords(user: string){
-    try{
-      const contract = await readAccessControlContract();
-      const sharedRecordInfo = await contract.getSharedRecords(user);
-      return sharedRecordInfo;
-    }catch(error){
-      console.error('Failed to get shared records', error);
-      throw error;
-    }
+export async function getSharedRecords(user: string) {
+  try {
+    const contract = await readAccessControlContract();
+    const sharedRecordInfo = await contract.getSharedRecords(user);
+    return sharedRecordInfo;
+  } catch (error) {
+    console.error('Failed to get shared records', error);
+    throw error;
   }
+}
 
-  export async function checkWhoHasAccess(recordId: string) {
-    try {
-      const contract = await writeAccessControlContract();
-      const accessList = await contract.checkWhoHasAccess(recordId);
-      return accessList;
-    } catch (error) {
-      console.error('Failed to check who has access', error);
-      throw error;
-    }
+export async function checkWhoHasAccess(recordId: string) {
+  try {
+    const contract = await writeAccessControlContract();
+    const accessList = await contract.checkWhoHasAccess(recordId);
+    return accessList;
+  } catch (error) {
+    console.error('Failed to check who has access', error);
+    throw error;
   }
+}
 
 export async function getSharedRecordsWithDetails(userAddress: string) {
   try {
     console.log('📋 Getting shared records for:', userAddress);
+
+    // Verify private key exists FIRST (IndexedDB)
+    const { hasPrivateKey } = await import('./keyStorage');
+    const hasAdminKey = await hasPrivateKey('adminPrivateKey');
+    const hasPatientKey = await hasPrivateKey('patientPrivateKey');
     
-    // 1. Get list of shared records (just metadata)
+    if (!hasAdminKey && !hasPatientKey) {
+      console.warn('⚠️ No private keys found in IndexedDB');
+      throw new Error('No private keys available. Please generate keys first.');
+    }
+
+    // 1. Get list of shared records
     const sharedRecordInfos = await getSharedRecords(userAddress);
     console.log('📋 Raw shared record infos:', sharedRecordInfos);
-    
+
+    if (sharedRecordInfos.length === 0) {
+      console.log('ℹ️ No records have been shared with this address yet');
+      return [];
+    }
+
     // 2. For each shared record, fetch the full details
     const fullRecords = await Promise.all(
       sharedRecordInfos.map(async (info: any) => {
         try {
           console.log('🔄 Processing record:', {
             patient: info.patientAddress,
-            recordId: info.recordId
+            recordId: info.recordId,
           });
-          
-          // Fetch and decrypt the actual record
+
           const record = await fetchAndDecryptSharedRecord(
             info.patientAddress,
             info.recordId,
             userAddress
           );
-          
-          console.log('✅ Record processed:', {
-            recordId: record.recordId,
-            hasPatientAddress: !!record.patientAddress,
-            hasFile: !!record.file,
-            fileType: record.file?.type
-          });
-          
+
           return {
             ...record,
-            patientAddress: info.patientAddress, // ← Ensure it's preserved
-            sharedTimestamp: info.timestamp
+            patientAddress: info.patientAddress,
+            sharedTimestamp: info.timestamp,
           };
-        } catch (error) {
+        } catch (error: any) {
           console.error(`❌ Error fetching record ${info.recordId}:`, error);
-          return null;
+          
+          // Return placeholder so it shows up in UI with error state
+          return {
+            recordId: info.recordId,
+            patientAddress: info.patientAddress,
+            sharedTimestamp: info.timestamp,
+            file: {
+              name: 'Decryption Failed',
+              type: 'error',
+              base64: ''
+            },
+            metadata: {
+              recordType: 'Error',
+              timestamp: new Date().toISOString(),
+              error: error.message || 'Failed to decrypt - likely key mismatch'
+            }
+          };
         }
       })
     );
-    
-    const validRecords = fullRecords.filter(r => r !== null);
-    console.log('✅ Total valid records:', validRecords.length);
-    
-    return validRecords;
+
+    const validRecords = fullRecords.filter((r) => r !== null);
+    console.log('✅ Total records (including errors):', fullRecords.length);
+    console.log('✅ Successfully decrypted:', validRecords.filter(r => r.metadata.recordType !== 'Error').length);
+
+    return fullRecords; // Return all records, including errors
   } catch (error) {
     console.error('❌ Error getting shared records with details:', error);
     throw error;
@@ -1040,11 +1076,11 @@ export async function fetchAndDecryptSharedRecord(
     console.log('Patient:', patientAddress);
     console.log('Record ID:', recordId);
     console.log('Recipient:', recipientAddress);
-    
+
     // 1. Get the medical record metadata from blockchain
     const record = await getMedicalRecord(patientAddress, recordId);
     console.log('📦 Medical record:', record);
-    
+
     const contract = await readAccessControlContract();
 
     // 2. Get encrypted AES key for this recipient
@@ -1054,24 +1090,45 @@ export async function fetchAndDecryptSharedRecord(
       recipientAddress,
       recordId
     );
-    console.log('🔑 Encrypted AES key:', encryptedAESKey?.substring(0, 20) + '...');
-    
+    console.log(
+      '🔑 Encrypted AES key:',
+      encryptedAESKey?.substring(0, 20) + '...'
+    );
+
+    if (!encryptedAESKey || encryptedAESKey === '0x') {
+      throw new Error('No encrypted key found for this record. Access might not have been granted correctly.');
+    }
+
     // 3. Decrypt AES key with recipient's private key
-    const patientKey = localStorage.getItem('patientPrivateKey');
-    const adminKey = localStorage.getItem('adminPrivateKey');
-    
-    if (!patientKey && !adminKey) {
+    const { hasPrivateKey } = await import('./keyStorage');
+    const hasPatientKey = await hasPrivateKey('patientPrivateKey');
+    const hasAdminKey = await hasPrivateKey('adminPrivateKey');
+
+    console.log('🔍 Debug - Available keys (IndexedDB):', {
+      hasPatientKey,
+      hasAdminKey,
+      encryptedAESKeyValue: encryptedAESKey,
+      encryptedAESKeyType: typeof encryptedAESKey,
+      encryptedAESKeyLength: encryptedAESKey?.length
+    });
+
+    if (!hasPatientKey && !hasAdminKey) {
       throw new Error('No private key found (neither patient nor admin)');
+    }
+
+    if (!encryptedAESKey || encryptedAESKey === '0x' || encryptedAESKey === '0x0') {
+      throw new Error(`Invalid encrypted AES key received from contract: "${encryptedAESKey}". The key may not have been stored correctly when the patient shared the record.`);
     }
 
     let aesKey: string | null = null;
     let decryptionError: any = null;
 
     // Try patient key first if available
-    if (patientKey) {
+    // Try patient key first if available
+    if (hasPatientKey) {
       try {
         console.log('🔓 Trying to decrypt with patient key...');
-        aesKey = await decryptAESKey(encryptedAESKey, patientKey);
+        aesKey = await decryptAESKey(encryptedAESKey, 'patientPrivateKey');
         console.log('✅ Decrypted with patient key');
       } catch (err) {
         console.log('❌ Failed to decrypt with patient key:', err);
@@ -1080,52 +1137,56 @@ export async function fetchAndDecryptSharedRecord(
     }
 
     // If patient key failed or wasn't available, try admin key
-    if (!aesKey && adminKey) {
+    if (!aesKey && hasAdminKey) {
       try {
         console.log('🔓 Trying to decrypt with admin key...');
-        aesKey = await decryptAESKey(encryptedAESKey, adminKey);
+        aesKey = await decryptAESKey(encryptedAESKey, 'adminPrivateKey');
         console.log('✅ Decrypted with admin key');
       } catch (err) {
-        console.log('Failed to decrypt with admin key:', err);
+        console.log('❌ Failed to decrypt with admin key:', err);
         decryptionError = err;
       }
     }
 
     if (!aesKey) {
-      throw new Error(`Failed to decrypt AES key with any available private key. Last error: ${decryptionError?.message || 'Unknown error'}`);
+      throw new Error(
+        `Failed to decrypt AES key with any available private key. Last error: ${
+          decryptionError?.message || 'Unknown error'
+        }`
+      );
     }
-    
+
     // 4. Fetch encrypted document from IPFS
     console.log('📥 Fetching from IPFS, CID:', record.cid);
     const response = await fetch(
       `http://localhost:8080/api/upload/fetchFromIPFS/${record.cid}`
     );
-    
+
     if (!response.ok) {
       throw new Error(`Failed to fetch from IPFS: ${response.statusText}`);
     }
-    
+
     const encryptedData = await response.text();
     console.log('📥 Encrypted data fetched, length:', encryptedData.length);
-    
+
     // 5. Decrypt the document with AES key
     console.log('🔓 Decrypting document...');
     const decrypted = CryptoJS.AES.decrypt(encryptedData, aesKey).toString(
       CryptoJS.enc.Utf8
     );
-    
+
     if (!decrypted) {
       throw new Error('Decryption failed - empty result');
     }
-    
+
     const payload = JSON.parse(decrypted);
     console.log('✅ Document decrypted successfully');
     console.log('📄 Payload structure:', {
       hasFile: !!payload.file,
       hasMetadata: !!payload.metadata,
-      fileKeys: payload.file ? Object.keys(payload.file) : []
+      fileKeys: payload.file ? Object.keys(payload.file) : [],
     });
-    
+
     // 6. Return the full decrypted record with proper structure
     return {
       recordId: record.medicalRecordID,
@@ -1133,17 +1194,50 @@ export async function fetchAndDecryptSharedRecord(
       patientAddress: patientAddress, // ← Ensure this is included!
       file: {
         name: payload.file?.fileName || payload.file?.name || recordId,
-        type: payload.file?.fileType || payload.file?.type || 'application/octet-stream',
-        base64: payload.file?.base64 || ''
+        type:
+          payload.file?.fileType ||
+          payload.file?.type ||
+          'application/octet-stream',
+        base64: payload.file?.base64 || '',
       },
       metadata: {
         recordType: payload.metadata?.recordType || 'Unknown',
         timestamp: payload.metadata?.timestamp || new Date().toISOString(),
-        ...payload.metadata
-      }
+        ...payload.metadata,
+      },
     };
   } catch (error) {
     console.error('❌ Error fetching and decrypting shared record:', error);
     throw error;
+  }
+}
+
+export async function getCreatedRecords(doctorAddress: string) {
+  try {
+    console.log("Doctor's address: ", doctorAddress);
+
+    const contract = await writeMedicalRecordsContract();
+    const createdRecords = await contract.getCreatedRecords(doctorAddress);
+    console.log('Created Records: ', createdRecords);
+    return createdRecords;
+  } catch (error) {
+    console.error('Failed to fetch created records by the doctor');
+    throw error;
+  }
+}
+
+
+export async function verifyRSAKeyPair(publicKey: string, keyId: string) {
+  try {
+    // Generate a valid hex string (32 chars / 16 bytes) to mimic an AES key
+    const testValue = CryptoJS.lib.WordArray.random(16).toString();
+
+    const encrypted = await encryptWithPublicKey(testValue, publicKey);
+    const decrypted = await decryptAESKey(encrypted, keyId);
+
+    return decrypted === testValue;
+  } catch (err) {
+    console.error("RSA keypair verification failed:", err);
+    return false;
   }
 }
