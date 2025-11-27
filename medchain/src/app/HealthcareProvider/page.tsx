@@ -12,6 +12,7 @@ import { UserRole } from '../../../utils/userRole';
 import { generateAndRegisterAdminKey } from '@/lib/adminKeys';
 import SharedDocumentsTable from '@/components/SharedDocumentsTable';
 import PatientRecordViewerModal from '@/components/PatientRecordViewerModal';
+import { useRouter } from 'next/navigation';
 
 interface SharedRecord {
   recordId: string;
@@ -47,6 +48,7 @@ const HealthcareProviderDashboard = () => {
   const [createdRecords, setCreatedRecords] = useState<MedicalRecord[]>([]);
   const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     const init = async () => {
@@ -230,12 +232,12 @@ const HealthcareProviderDashboard = () => {
             title="Add Medical Record"
             description="Upload new medical documents"
             buttonText="+ Upload"
-            href="/Patient/Upload"
+            href="/HealthcareProvider/Upload"
           />
           <ActionCard
             icon={<Settings size={24} />}
-            title="Manage Access"
-            description="Control who sees your records"
+            title="Edit Your Profile"
+            description="Manage your account settings"
             buttonText="Settings"
           />
           <ActionCard
@@ -253,7 +255,10 @@ const HealthcareProviderDashboard = () => {
           <h3 className="text-white text-lg font-semibold">
             Created Medical Records
           </h3>
-          <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 text-sm">
+          <button 
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 text-sm"
+            onClick={() => router.push('/HealthcareProvider/Upload')}
+          >
             <Plus size={16} />
             Create Record
           </button>
@@ -275,9 +280,6 @@ const HealthcareProviderDashboard = () => {
                   </th>
                   <th className="text-left text-gray-400 py-3 px-4 text-sm">
                     Date
-                  </th>
-                  <th className="text-left text-gray-400 py-3 px-4 text-sm">
-                    Actions
                   </th>
                 </tr>
               </thead>

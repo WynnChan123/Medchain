@@ -8,6 +8,7 @@ describe('Healthcare System Contracts', function () {
   let accessControl;
   let healthcareSystem;
   let roleUpgrade;
+  let claimRequest;
   let admin, patient, doctor, insurer;
 
   const adminHashedId =
@@ -17,7 +18,7 @@ describe('Healthcare System Contracts', function () {
   const doctorHashedId =
     '0x3456789012cdef123456789012cdef123456789012cdef123456789012cdef12';
   const insurerHashedId =
-    '0x456789013def1234567890123def1234567890123def1234567890123def123';
+    '0x4567890123def1234567890123def1234567890123def1234567890123def123';
 
   beforeEach(async function () {
     [admin, patient, doctor, insurer] = await ethers.getSigners();
@@ -64,6 +65,15 @@ describe('Healthcare System Contracts', function () {
       await roleUpgrade.getAddress()
     );
     await healthcareSystem.waitForDeployment();
+
+    //Deploy ClaimRequest
+    const ClaimRequest = await ethers.getContractFactory('ClaimRequest');
+    claimRequest = await ClaimRequest.deploy(
+      await userManagement.getAddress(),
+      await medicalRecords.getAddress(),
+      await accessControl.getAddress()
+    );
+    await claimRequest.waitForDeployment();
 
     // Authorize RoleUpgrade contract to set user roles
     await userManagement
@@ -2017,6 +2027,654 @@ describe('Healthcare System Contracts', function () {
         });
       });
   });
+
+describe('ClaimRequest', function () {
+  const recordId = 'LAB_001';
+  const recordId2 = 'LAB_002';
+
+  beforeEach(async function () {
+    // Register patient
+    await healthcareSystem
+      .connect(patient)
+      .registerUser(await patient.getAddress(), patientHashedId, 1);
+
+    // Register insurer as patient first
+    await healthcareSystem
+      .connect(insurer)
+      .registerUser(await insurer.getAddress(), insurerHashedId, 1);
+
+    // Register doctor as patient first
+    await healthcareSystem
+      .connect(doctor)
+      .registerUser(await doctor.getAddress(), doctorHashedId, 1);
+
+    // Upgrade doctor to HealthcareProvider
+    const admins = [await admin.getAddress()];
+    const encryptedKey = [ethers.toUtf8Bytes('EncryptedKeyExample')];
+
+    await roleUpgrade
+      .connect(doctor)
+      .submitUpgradeRequest(
+        await doctor.getAddress(),
+        'QmDoctorCID',
+        2,
+        admins,
+        encryptedKey
+      );
+
+    await roleUpgrade
+      .connect(admin)
+      .approveRequest(1, await doctor.getAddress());
+
+    // Upgrade insurer to Insurer role
+    await roleUpgrade
+      .connect(insurer)
+      .submitUpgradeRequest(
+        await insurer.getAddress(),
+        'QmInsurerCID',
+        3,
+        admins,
+        encryptedKey
+      );
+
+    await roleUpgrade
+      .connect(admin)
+      .approveRequest(2, await insurer.getAddress());
+
+    // Add medical records
+    const patientKey = ethers.toUtf8Bytes('aes-key-for-patient');
+    await medicalRecords
+      .connect(doctor)
+      .addMedicalRecord(
+        await patient.getAddress(),
+        recordId,
+        'QmHash123',
+        patientKey,
+        'Blood Test'
+      );
+
+    await medicalRecords
+      .connect(doctor)
+      .addMedicalRecord(
+        await patient.getAddress(),
+        recordId2,
+        'QmHash124',
+        patientKey,
+        'X-Ray'
+      );
+
+    // Patient shares record with insurer
+    const insurerKey = ethers.toUtf8Bytes('aes-key-for-insurer');
+    await medicalRecords
+      .connect(patient)
+      .shareMedicalRecord(
+        await patient.getAddress(),
+        recordId,
+        await insurer.getAddress(),
+        await accessControl.getAddress(),
+        insurerKey
+      );
+
+    await medicalRecords
+      .connect(patient)
+      .shareMedicalRecord(
+        await patient.getAddress(),
+        recordId2,
+        await insurer.getAddress(),
+        await accessControl.getAddress(),
+        insurerKey
+      );
+  });
+
+  it('Should allow patients to submit claims', async function () {
+    await expect(
+      claimRequest
+        .connect(patient)
+        .submitClaim(
+          await insurer.getAddress(),
+          recordId,
+          5000,
+          'Surgery',
+          'Appendectomy surgery claim',
+          'QmClaimCID123'
+        )
+    )
+      .to.emit(claimRequest, 'ClaimSubmitted')
+      .withArgs(
+        1,
+        await patient.getAddress(),
+        await insurer.getAddress(),
+        recordId,
+        5000,
+        anyValue
+      );
+  });
+
+  it('Should prevent non-patients from submitting claims', async function () {
+    await expect(
+      claimRequest
+        .connect(doctor)
+        .submitClaim(
+          await insurer.getAddress(),
+          recordId,
+          5000,
+          'Surgery',
+          'Test claim',
+          'QmClaimCID123'
+        )
+    ).to.be.revertedWith('Only patients can submit claims');
+  });
+
+  it('Should prevent claims for non-existent medical records', async function () {
+    await expect(
+      claimRequest
+        .connect(patient)
+        .submitClaim(
+          await insurer.getAddress(),
+          'NON_EXISTENT',
+          5000,
+          'Surgery',
+          'Test claim',
+          'QmClaimCID123'
+        )
+    ).to.be.revertedWith('Medical record does not exist');
+  });
+
+  it('Should prevent claims when insurer has no access to medical record', async function () {
+    // Register another insurer without access
+    const signers = await ethers.getSigners();
+    const insurer2 = signers[5];
+
+    await healthcareSystem
+      .connect(insurer2)
+      .registerUser(
+        await insurer2.getAddress(),
+        ethers.keccak256(ethers.toUtf8Bytes('insurer2')),
+        1
+      );
+
+    const admins = [await admin.getAddress()];
+    const encryptedKey = [ethers.toUtf8Bytes('EncryptedKeyExample')];
+
+    await roleUpgrade
+      .connect(insurer2)
+      .submitUpgradeRequest(
+        await insurer2.getAddress(),
+        'QmInsurer2CID',
+        3,
+        admins,
+        encryptedKey
+      );
+
+    await roleUpgrade
+      .connect(admin)
+      .approveRequest(3, await insurer2.getAddress());
+
+    await expect(
+      claimRequest
+        .connect(patient)
+        .submitClaim(
+          await insurer2.getAddress(),
+          recordId,
+          5000,
+          'Surgery',
+          'Test claim',
+          'QmClaimCID123'
+        )
+    ).to.be.revertedWith('Insurer does not have access to this medical record');
+  });
+
+  it('Should retrieve claim details correctly', async function () {
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId,
+        5000,
+        'Surgery',
+        'Appendectomy surgery claim',
+        'QmClaimCID123'
+      );
+
+    const claim = await claimRequest.getClaim(1);
+
+    expect(claim.claimId).to.equal(1);
+    expect(claim.patientAddress).to.equal(await patient.getAddress());
+    expect(claim.insurerAddress).to.equal(await insurer.getAddress());
+    expect(claim.medicalRecordID).to.equal(recordId);
+    expect(claim.requestedAmount).to.equal(5000);
+    expect(claim.approvedAmount).to.equal(0);
+    expect(claim.claimType).to.equal('Surgery');
+    expect(claim.description).to.equal('Appendectomy surgery claim');
+    expect(claim.status).to.equal(0); // Pending
+    expect(claim.notes).to.equal('');
+    expect(claim.cid).to.equal('QmClaimCID123');
+  });
+
+  it('Should allow insurers to approve claims', async function () {
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId,
+        5000,
+        'Surgery',
+        'Test claim',
+        'QmClaimCID123'
+      );
+
+    await expect(
+      claimRequest
+        .connect(insurer)
+        .approveClaim(1, 4500, 'Approved with standard deductible')
+    )
+      .to.emit(claimRequest, 'ClaimProcessed')
+      .withArgs(1, 1, 4500, anyValue); // 1 = Approved status
+
+    const claim = await claimRequest.getClaim(1);
+    expect(claim.status).to.equal(1); // Approved
+    expect(claim.approvedAmount).to.equal(4500);
+    expect(claim.notes).to.equal('Approved with standard deductible');
+  });
+
+  it('Should prevent non-authorized insurers from approving claims', async function () {
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId,
+        5000,
+        'Surgery',
+        'Test claim',
+        'QmClaimCID123'
+      );
+
+    await expect(
+      claimRequest.connect(doctor).approveClaim(1, 4500, 'Test approval')
+    ).to.be.revertedWith('Only authorized insurer can access this claim');
+  });
+
+  it('Should prevent approving already processed claims', async function () {
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId,
+        5000,
+        'Surgery',
+        'Test claim',
+        'QmClaimCID123'
+      );
+
+    await claimRequest
+      .connect(insurer)
+      .approveClaim(1, 4500, 'First approval');
+
+    await expect(
+      claimRequest.connect(insurer).approveClaim(1, 4000, 'Second approval')
+    ).to.be.revertedWith('Claim has already been processed');
+  });
+
+  it('Should prevent approving with zero amount', async function () {
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId,
+        5000,
+        'Surgery',
+        'Test claim',
+        'QmClaimCID123'
+      );
+
+    await expect(
+      claimRequest.connect(insurer).approveClaim(1, 0, 'Zero approval')
+    ).to.be.revertedWith('Approved amount must be greater than 0');
+  });
+
+  it('Should prevent approving amount exceeding requested amount', async function () {
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId,
+        5000,
+        'Surgery',
+        'Test claim',
+        'QmClaimCID123'
+      );
+
+    await expect(
+      claimRequest.connect(insurer).approveClaim(1, 6000, 'Excessive approval')
+    ).to.be.revertedWith('Approved amount cannot exceed requested amount');
+  });
+
+  it('Should allow insurers to reject claims', async function () {
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId,
+        5000,
+        'Surgery',
+        'Test claim',
+        'QmClaimCID123'
+      );
+
+    await expect(
+      claimRequest
+        .connect(insurer)
+        .rejectClaim(1, 'Insufficient documentation provided')
+    )
+      .to.emit(claimRequest, 'ClaimProcessed')
+      .withArgs(1, 2, 0, anyValue); // 2 = Rejected status
+
+    const claim = await claimRequest.getClaim(1);
+    expect(claim.status).to.equal(2); // Rejected
+    expect(claim.approvedAmount).to.equal(0);
+    expect(claim.notes).to.equal('Insufficient documentation provided');
+  });
+
+  it('Should prevent rejecting without a reason', async function () {
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId,
+        5000,
+        'Surgery',
+        'Test claim',
+        'QmClaimCID123'
+      );
+
+    await expect(
+      claimRequest.connect(insurer).rejectClaim(1, '')
+    ).to.be.revertedWith('Rejection reason is required');
+  });
+
+  it('Should get claims by patient', async function () {
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId,
+        5000,
+        'Surgery',
+        'First claim',
+        'QmClaimCID1'
+      );
+
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId2,
+        3000,
+        'Consultation',
+        'Second claim',
+        'QmClaimCID2'
+      );
+
+    const patientClaimIds = await claimRequest.getClaimsByPatient(
+      await patient.getAddress()
+    );
+
+    expect(patientClaimIds.length).to.equal(2);
+    expect(patientClaimIds[0]).to.equal(1);
+    expect(patientClaimIds[1]).to.equal(2);
+  });
+
+  it('Should get claims by insurer', async function () {
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId,
+        5000,
+        'Surgery',
+        'First claim',
+        'QmClaimCID1'
+      );
+
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId2,
+        3000,
+        'Consultation',
+        'Second claim',
+        'QmClaimCID2'
+      );
+
+    const insurerClaimIds = await claimRequest.getClaimsByInsurer(
+      await insurer.getAddress()
+    );
+
+    expect(insurerClaimIds.length).to.equal(2);
+    expect(insurerClaimIds[0]).to.equal(1);
+    expect(insurerClaimIds[1]).to.equal(2);
+  });
+
+  it('Should get claims by medical record', async function () {
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId,
+        5000,
+        'Surgery',
+        'First claim',
+        'QmClaimCID1'
+      );
+
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId,
+        2000,
+        'Follow-up',
+        'Second claim for same record',
+        'QmClaimCID2'
+      );
+
+    const recordClaimIds = await claimRequest
+      .connect(patient)
+      .getClaimsByMedicalRecord(await patient.getAddress(), recordId);
+
+    expect(recordClaimIds.length).to.equal(2);
+    expect(recordClaimIds[0]).to.equal(1);
+    expect(recordClaimIds[1]).to.equal(2);
+  });
+
+  it('Should prevent unauthorized access to claims by medical record', async function () {
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId,
+        5000,
+        'Surgery',
+        'Test claim',
+        'QmClaimCID1'
+      );
+
+    await expect(
+      claimRequest
+        .connect(doctor)
+        .getClaimsByMedicalRecord(await patient.getAddress(), recordId)
+    ).to.be.revertedWith('No access to view claims for this record');
+  });
+
+it('Should get correct insurer statistics', async function () {
+    // Submit 3 claims
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId,
+        5000,
+        'Surgery',
+        'Claim 1',
+        'QmCID1'
+      );
+
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId2,
+        3000,
+        'Consultation',
+        'Claim 2',
+        'QmCID2'
+      );
+
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId,
+        2000,
+        'Lab Test',
+        'Claim 3',
+        'QmCID3'
+      );
+
+    // Approve one
+    await claimRequest.connect(insurer).approveClaim(1, 4500, 'Approved');
+
+    // Reject one
+    await claimRequest.connect(insurer).rejectClaim(2, 'Rejected');
+
+    // Get statistics
+    const stats = await claimRequest.getInsurerStatistics(
+      await insurer.getAddress()
+    );
+
+    // Access struct properties
+    expect(stats.totalClaims).to.equal(3);
+    expect(stats.pendingClaims).to.equal(1);
+    expect(stats.approvedClaims).to.equal(1);
+    expect(stats.rejectedClaims).to.equal(1);
+    expect(stats.totalRequestedAmount).to.equal(10000);
+    expect(stats.totalApprovedAmount).to.equal(4500);
+  });
+
+  it('Should allow authorized insurers to get claim medical record', async function () {
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId,
+        5000,
+        'Surgery',
+        'Test claim',
+        'QmClaimCID1'
+      );
+
+    const medicalRecord = await claimRequest
+      .connect(insurer)
+      .getClaimMedicalRecord(1);
+
+    expect(medicalRecord.medicalRecordID).to.equal(recordId);
+    expect(medicalRecord.patientAddress).to.equal(await patient.getAddress());
+    expect(medicalRecord.cid).to.equal('QmHash123');
+  });
+
+  it('Should prevent unauthorized access to claim medical record', async function () {
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId,
+        5000,
+        'Surgery',
+        'Test claim',
+        'QmClaimCID1'
+      );
+
+    await expect(
+      claimRequest.connect(doctor).getClaimMedicalRecord(1)
+    ).to.be.revertedWith('Only authorized insurer can access this claim');
+  });
+
+  it('Should get details for multiple claims', async function () {
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId,
+        5000,
+        'Surgery',
+        'Claim 1',
+        'QmCID1'
+      );
+
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId2,
+        3000,
+        'Consultation',
+        'Claim 2',
+        'QmCID2'
+      );
+
+    const claimIds = [1, 2];
+    const claimDetails = await claimRequest.getClaimDetails(claimIds);
+
+    expect(claimDetails.length).to.equal(2);
+    expect(claimDetails[0].claimId).to.equal(1);
+    expect(claimDetails[0].requestedAmount).to.equal(5000);
+    expect(claimDetails[1].claimId).to.equal(2);
+    expect(claimDetails[1].requestedAmount).to.equal(3000);
+  });
+
+  it('Should track multiple claims for same medical record', async function () {
+    // Submit 3 claims for the same record
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId,
+        5000,
+        'Surgery',
+        'Initial surgery',
+        'QmCID1'
+      );
+
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId,
+        1000,
+        'Follow-up',
+        'Post-op checkup',
+        'QmCID2'
+      );
+
+    await claimRequest
+      .connect(patient)
+      .submitClaim(
+        await insurer.getAddress(),
+        recordId,
+        500,
+        'Medication',
+        'Prescribed medication',
+        'QmCID3'
+      );
+
+    const recordClaimIds = await claimRequest
+      .connect(patient)
+      .getClaimsByMedicalRecord(await patient.getAddress(), recordId);
+
+    expect(recordClaimIds.length).to.equal(3);
+  });
+});
 
   describe('Integration Tests', function () {
     const recordId = 'LAB_001';

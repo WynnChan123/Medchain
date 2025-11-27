@@ -63,6 +63,7 @@ interface IUserManagement {
 interface IMedicalRecords {
     function patientMedicalRecord(address patient, string memory recordId) external view returns (Med2ChainStructs.MedicalRecord memory);
     function recordExists(address patient, string memory recordId) external view returns (bool);
+    function getMedicalRecord(address patient, string memory recordId) external view returns (Med2ChainStructs.MedicalRecord memory);
 }
 
 interface IAccessControl {
