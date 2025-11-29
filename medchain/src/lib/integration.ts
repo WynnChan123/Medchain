@@ -1222,3 +1222,23 @@ export async function verifyRSAKeyPair(publicKey: string): Promise<boolean> {
     return false;
   }
 }
+
+export async function revokeAccess(
+  patientAddress: string,
+  walletAddress: string,
+  medicalRecordID: string
+){
+  try {
+    const contract = await writeAccessControlContract();
+    const tx = await contract.revokeAccess(
+      patientAddress,
+      walletAddress,
+      medicalRecordID
+    );
+    await tx.wait();
+    return tx;
+  } catch (error) {
+    console.error('Failed to grant access to other users', error);
+    throw error;
+  }
+}

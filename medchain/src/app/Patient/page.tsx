@@ -12,13 +12,9 @@ import {
   getRole,
   checkWhoHasAccess,
   verifyRSAKeyPair,
+  revokeAccess,
 } from '@/lib/integration';
 import { UserRole } from '../../../utils/userRole';
-import { generateAndRegisterAdminKey } from '@/lib/adminKeys';
-import {
-  generateAndRegisterPatientKey,
-  getPatientPublicKey,
-} from '@/lib/patientKeys';
 import PatientRecordViewerModal from '@/components/PatientRecordViewerModal';
 import { fetchAndDecryptPatientRecord } from '@/lib/decryption';
 import ShareMedicalRecordModal from '@/components/ShareMedicalRecordModal';
@@ -70,6 +66,7 @@ const PatientDashboard = () => {
   const [selectedUser, setSelectedUser] = useState('');
   const [sharedWith, setSharedWith] = useState<SharedRecord[]>([]);
   const [loadingShared, setLoadingShared] = useState(false);
+  const [userAddress, setUserAddress] = useState("");
   const router = useRouter();
 
 useEffect(() => {
@@ -153,6 +150,21 @@ useEffect(() => {
 
     init();
   }, []);
+
+    useEffect(()=> {
+      const fetchUserWallet = async() => {
+        if(!window.ethereum){
+          return;
+        }
+        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        const signer = provider.getSigner();
+        const userAddress = await signer.getAddress();   
+        console.log(userAddress); 
+        setUserAddress(userAddress);
+      }
+  
+      fetchUserWallet();
+    },[]);
 
   useEffect(() => {
     // Get wallet address from your Connect component or Web3 provider
@@ -268,6 +280,11 @@ useEffect(() => {
   const handleShareSuccess = () => {
     fetchSharedAccess();
   };
+
+  const handleRevokeAccess = async (walletAddress: string, medicalRecordID: string) => {
+    await revokeAccess(userAddress, walletAddress, medicalRecordID);
+    fetchSharedAccess();
+  }
 
   return (
     <div className="space-y-6">
@@ -478,8 +495,8 @@ useEffect(() => {
                       </td>
                       <td className="py-3 px-4">
                         <button
-                          className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm opacity-50 cursor-not-allowed"
-                          title="Revoke not implemented yet"
+                          className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm cursor-pointer"
+                          onClick={()=> handleRevokeAccess(share.address, share.recordId)}
                         >
                           Revoke
                         </button>
