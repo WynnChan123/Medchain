@@ -7,12 +7,17 @@ import FileUploadField from '@/components/FileUploadField';
 import ActionCard from '@/components/ActionCard';
 import RoleUpgradeModal from '@/components/RoleUpgradeModal';
 import { BigNumber, ethers } from 'ethers';
-import { getAdminPublicKey, getCreatedRecords, getRole, getSharedRecordsWithDetails, verifyRSAKeyPair } from '@/lib/integration';
+import {
+  getCreatedRecords,
+  getRole,
+  getSharedRecordsWithDetails,
+  verifyRSAKeyPair,
+} from '@/lib/integration';
 import { UserRole } from '../../../utils/userRole';
-import { generateAndRegisterAdminKey } from '@/lib/adminKeys';
 import SharedDocumentsTable from '@/components/SharedDocumentsTable';
 import PatientRecordViewerModal from '@/components/PatientRecordViewerModal';
 import { useRouter } from 'next/navigation';
+import { generateAndRegisterUserKey, getUserPublicKey } from '@/lib/userKeys';
 
 interface SharedRecord {
   recordId: string;
@@ -29,7 +34,7 @@ interface SharedRecord {
   sharedTimestamp?: any;
 }
 
-interface MedicalRecord{
+interface MedicalRecord {
   medicalRecordID: string;
   recordType: string;
   createdAt: BigNumber;
@@ -46,11 +51,13 @@ const HealthcareProviderDashboard = () => {
   const [hasPublicKey, setHasPublicKey] = useState<boolean>(false);
   const [sharedRecords, setSharedRecords] = useState<SharedRecord[]>([]);
   const [createdRecords, setCreatedRecords] = useState<MedicalRecord[]>([]);
-  const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
+  const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(
+    null
+  );
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const router = useRouter();
 
-  useEffect(() => {
+useEffect(() => {
     const init = async () => {
       if (!window.ethereum) return;
 
@@ -59,102 +66,98 @@ const HealthcareProviderDashboard = () => {
       const userAddress = await signer.getAddress();
       const userRole = await getRole(userAddress);
 
-      console.log("User role:", userRole);
+      console.log('User role:', userRole);
 
       if (userRole !== UserRole.HealthcareProvider) {
-        console.log("User is patient only");
+        console.log('User is not a Healthcare Provider');
         return;
       }
 
-      setSecondRole("Healthcare Provider");
+      // Set role IMMEDIATELY
+      setSecondRole('Healthcare Provider');
 
-      // 1️⃣ Fetch keys
-      const onChainPublicKey = await getAdminPublicKey(userAddress);
-      
-      // Dynamic import to avoid SSR issues and circular dependencies if any
+      // Unified key check and generation (mirrors patient dashboard)
       const { hasPrivateKey } = await import('@/lib/keyStorage');
-      
-      // Check for both admin and patient keys (upgraded users might have patientPrivateKey)
-      let localKeyId = "adminPrivateKey";
-      let hasLocalKey = await hasPrivateKey(localKeyId);
+      const hasLocalKey = await hasPrivateKey('userPrivateKey', userAddress); // Unified ID
+      let onChainPublicKey = await getUserPublicKey(userAddress); // Unified fetch
 
-      if (!hasLocalKey) {
-        // Fallback: Check if they have a patient key (e.g. they were just upgraded)
-        const hasPatientKey = await hasPrivateKey("patientPrivateKey");
-        if (hasPatientKey) {
-          console.log("Found patientPrivateKey, using it for Healthcare Provider.");
-          localKeyId = "patientPrivateKey";
-          hasLocalKey = true;
+      console.log('🔑 Fetched on-chain public key:', onChainPublicKey ? 'Present' : 'Missing');
+      console.log('🔑 Has local private key (userPrivateKey):', hasLocalKey);
+
+      if (!hasLocalKey || !onChainPublicKey) {
+        console.log('Missing keys - regenerating...');
+        console.log('Has local private key:', hasLocalKey);
+        console.log('Has on-chain public key:', !!onChainPublicKey);
+        
+        await generateAndRegisterUserKey(userAddress); // Unified gen (waits for tx)
+        console.log('✅ New user keypair generated and registered.');
+        
+        // Re-fetch post-gen to confirm
+        onChainPublicKey = await getUserPublicKey(userAddress);
+        if (!onChainPublicKey) {
+          console.error('❌ Failed to confirm on-chain key after generation');
+          setHasPublicKey(true); // Proceed optimistically
+          await fetchSharedRecords(userAddress); // Continue to fetch
+          return;
         }
-      }
-
-      console.log("Fetched on-chain public key:", onChainPublicKey);
-      console.log(`Has local private key (${localKeyId}):`, hasLocalKey);
-
-      if (hasLocalKey && onChainPublicKey) {
-        // Check if on-chain key matches our local public key (if stored)
-        const localPublicKey = localStorage.getItem('adminPublicKey');
-        if (localPublicKey && localPublicKey.trim() !== onChainPublicKey.trim()) {
-            console.warn("⚠️ On-chain public key does not match local public key.");
-            console.warn("This likely means the blockchain node is stale or the key was updated recently.");
-            console.warn("Skipping verification to avoid regeneration loop.");
-            setHasPublicKey(true);
-        } else {
-            const isValid = await verifyRSAKeyPair(onChainPublicKey, localKeyId);
-
-            if (!isValid) {
-              console.error("❌ RSA keypair verification failed. Keys mismatch.");
-              console.log("⚠️ Auto-regenerating keys to restore access (Old data will be lost)");
-              
-              // Regenerate and register new admin key
-              await generateAndRegisterAdminKey();
+        setHasPublicKey(true);
+      } else {
+        console.log('✅ Both keys found. Verifying match...');
+        
+        // Always verify (no localStorage skip)
+        const isValid = await verifyRSAKeyPair(onChainPublicKey); // Unified: Defaults to 'userPrivateKey'
+        console.log('Keypair verification result:', isValid);
+        
+        if (!isValid) {
+          console.error("❌ RSA keypair verification failed. Keys mismatch.");
+          
+          // Check for existing records before auto-regen (doctor-specific, e.g., created records)
+          const created = await getCreatedRecords(userAddress);
+          if (created && created.length > 0) {
+            const userChoice = confirm(
+              "Key mismatch detected!\n\nLocal private key doesn't match on-chain public key.\n\nRegenerating will lock existing records FOREVER.\n\nContinue and regenerate? (Refresh/reconnect wallet to retry.)"
+            );
+            if (!userChoice) {
+              console.log("❌ User aborted regeneration. Proceeding anyway (decryptions may fail).");
               setHasPublicKey(true);
-              alert("Your keys were mismatched and have been automatically regenerated. Old encrypted data is no longer accessible.");
+              await fetchSharedRecords(userAddress); // Proceed to fetch
               return;
             }
+          }
+          
+          console.log("⚠️ Auto-regenerating keys (Old data will be lost)");
+          await generateAndRegisterUserKey(userAddress);
+          onChainPublicKey = await getUserPublicKey(userAddress);
+          localStorage.setItem('userPublicKey', onChainPublicKey || '');
+          setHasPublicKey(true);
+          alert("Your keys were mismatched and have been automatically regenerated. Old encrypted data is no longer accessible.");
+        } else {
+          console.log('✅ Keypair verified successfully.');
+          // Sync localStorage
+          localStorage.setItem('userPublicKey', onChainPublicKey);
+          setHasPublicKey(true);
         }
       }
 
-      if (onChainPublicKey === undefined || onChainPublicKey === null) {
-          console.log("⚠ Public key not loaded yet — do NOT generate new keys.");
-          return;
-      }
-
-      if (!onChainPublicKey && !hasLocalKey) {
-          await generateAndRegisterAdminKey();
-          setHasPublicKey(true);
-          console.log("✅ Generated and registered new admin keypair.");
-      }
-
-      if (onChainPublicKey && !hasLocalKey) {
-        console.error("❌ CRITICAL: Public key exists but private key is missing.");
-        
-        // Auto-regenerate for testing/dev convenience (WARNING: Data Loss)
-        console.log("⚠️ Regenerating keys to restore access (Old data will be lost)");
-        await generateAndRegisterAdminKey();
-        setHasPublicKey(true);
-        return;
-      }
-
-      if (onChainPublicKey && hasLocalKey) {
-        console.log("✔ Valid keypair found locally and on-chain.");
-        setHasPublicKey(true);
-      }
-
-      // 3️⃣ Fetch shared records *only when private key is present*
-      try {
-        console.log("Fetching shared records…");
-        const records = await getSharedRecordsWithDetails(userAddress);
-        setSharedRecords(records);
-      } catch (err) {
-        console.error("❌ Failed to fetch shared records:", err);
-        console.warn("This is usually due to mismatched RSA keys.");
-      }
+      // Fetch shared records after key handling (always, but safe now)
+      await fetchSharedRecords(userAddress);
     };
 
     init();
   }, []);
 
+  // Extracted fetch function (for clarity and reuse)
+  const fetchSharedRecords = async (userAddress: string) => {
+    try {
+      console.log('📋 Fetching shared records…');
+      const records = await getSharedRecordsWithDetails(userAddress);
+      setSharedRecords(records);
+      console.log(`✅ Fetched ${records.length} shared records`);
+    } catch (err) {
+      console.error('❌ Failed to fetch shared records:', err);
+      console.warn('This may be due to mismatched RSA keys or decryption issues.');
+    }
+  };
 
   useEffect(() => {
     // Get wallet address from your Connect component or Web3 provider
@@ -178,7 +181,7 @@ const HealthcareProviderDashboard = () => {
     }
   }, [walletAddress]);
 
-  const fetchMedicalRecords = async()=> {
+  const fetchMedicalRecords = async () => {
     console.log('My wallet address: ', walletAddress);
     try {
       const records = await getCreatedRecords(walletAddress);
@@ -194,31 +197,39 @@ const HealthcareProviderDashboard = () => {
     } catch (error) {
       console.error('Error fetching created records:', error);
     }
-  }
+  };
 
   return (
     <div className="space-y-6">
-
       {/* Welcome Card */}
       <div className="bg-gradient-to-r from-blue-900 to-blue-800 rounded-lg p-6 shadow-lg border border-blue-700">
         <h2 className="text-white text-xl font-semibold mb-2">
           Doctor's Dashboard
         </h2>
         <p className="text-white mb-2">
-          Wallet: {walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : 'Connecting...'}
+          Wallet:{' '}
+          {walletAddress
+            ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
+            : 'Connecting...'}
         </p>
         <div className="flex gap-4 text-sm">
           <div className="bg-blue-600 px-4 py-2 rounded-lg">
             <p className="text-white">Records Shared With You</p>
-            <p className="text-white font-bold text-lg">{sharedRecords.length}</p>
+            <p className="text-white font-bold text-lg">
+              {sharedRecords.length}
+            </p>
           </div>
           <div className="bg-blue-600 px-4 py-2 rounded-lg">
             <p className="text-white">Total Created Records</p>
-            <p className="text-white font-bold text-lg">{createdRecords.length}</p>
+            <p className="text-white font-bold text-lg">
+              {createdRecords.length}
+            </p>
           </div>
           <div className="bg-blue-600 px-4 py-2 rounded-lg">
             <p className="text-white">Public Key</p>
-            <p className="text-white font-bold text-lg">{hasPublicKey ? '✅' : '⏳'}</p>
+            <p className="text-white font-bold text-lg">
+              {hasPublicKey ? '✅' : '⏳'}
+            </p>
           </div>
         </div>
       </div>
@@ -255,7 +266,7 @@ const HealthcareProviderDashboard = () => {
           <h3 className="text-white text-lg font-semibold">
             Created Medical Records
           </h3>
-          <button 
+          <button
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 text-sm"
             onClick={() => router.push('/HealthcareProvider/Upload')}
           >
@@ -293,13 +304,20 @@ const HealthcareProviderDashboard = () => {
                       {record.medicalRecordID}
                     </td>
                     <td className="text-gray-300 py-3 px-4 text-sm">
-                      {record.patientAddress ? `${record.patientAddress.slice(0, 6)}...${record.patientAddress.slice(-4)}` : 'Unknown'}
+                      {record.patientAddress
+                        ? `${record.patientAddress.slice(
+                            0,
+                            6
+                          )}...${record.patientAddress.slice(-4)}`
+                        : 'Unknown'}
                     </td>
                     <td className="text-gray-300 py-3 px-4 text-sm">
                       {record.recordType}
                     </td>
                     <td className="text-gray-300 py-3 px-4 text-sm">
-                      {new Date(record.createdAt.toNumber() * 1000).toLocaleString()}
+                      {new Date(
+                        record.createdAt.toNumber() * 1000
+                      ).toLocaleString()}
                     </td>
                   </tr>
                 ))}

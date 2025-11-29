@@ -6,6 +6,7 @@ import { UserRole } from '../../utils/userRole';
 import { print } from '../../utils/toast';
 import { ethers } from 'ethers';
 import CryptoJS from 'crypto-js';
+import { getUserPublicKey } from '@/lib/userKeys';
 
 interface PatientShareListModalProps {
   isOpen: boolean;
@@ -108,7 +109,7 @@ const handleShare = async() => {
     console.log('Uploaded encrypted payload to IPFS, CID: ', cid);
 
     //encrypt the aes key with patient's public key
-    const patientPublicKey = await getAdminPublicKey(selectedPatient);
+    const patientPublicKey = await getUserPublicKey(selectedPatient);
     if (!patientPublicKey) throw new Error('Patient has no public key registered');
 
     // encryptWithPublicKey now returns hex directly

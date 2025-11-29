@@ -3,9 +3,10 @@
 const DB_NAME = 'MedChainKeyStore';
 const DB_VERSION = 1;
 const STORE_NAME = 'keys';
+const KEY_PREFIX = 'userPrivateKey_'; // Prefix for unified keys
 
 export interface StoredKey {
-  id: string; // 'patientPrivateKey' or 'adminPrivateKey'
+  id: string; // Prefixed ID, e.g., 'userPrivateKey_0x123'
   key: CryptoKey;
   createdAt: number;
 }
@@ -35,16 +36,17 @@ function openDB(): Promise<IDBDatabase> {
 }
 
 /**
- * Store a private key handle in IndexedDB
+ * Store a private key handle in IndexedDB (address-aware)
  */
-export async function storePrivateKey(id: string, key: CryptoKey): Promise<void> {
+export async function storePrivateKey(keyId: string, key: CryptoKey, address: string): Promise<void> {
+  const prefixedId = `${KEY_PREFIX}${address.toLowerCase()}`;
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(STORE_NAME, 'readwrite');
     const store = transaction.objectStore(STORE_NAME);
     
     const item: StoredKey = {
-      id,
+      id: prefixedId,
       key,
       createdAt: Date.now()
     };
@@ -57,14 +59,15 @@ export async function storePrivateKey(id: string, key: CryptoKey): Promise<void>
 }
 
 /**
- * Retrieve a private key handle from IndexedDB
+ * Retrieve a private key handle from IndexedDB (address-aware)
  */
-export async function getPrivateKey(id: string): Promise<CryptoKey | null> {
+export async function getPrivateKey(keyId: string, address: string): Promise<CryptoKey | null> {
+  const prefixedId = `${KEY_PREFIX}${address.toLowerCase()}`;
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(STORE_NAME, 'readonly');
     const store = transaction.objectStore(STORE_NAME);
-    const request = store.get(id);
+    const request = store.get(prefixedId);
 
     request.onsuccess = () => {
       const result = request.result as StoredKey;
@@ -75,10 +78,10 @@ export async function getPrivateKey(id: string): Promise<CryptoKey | null> {
 }
 
 /**
- * Check if a key exists
+ * Check if a key exists (address-aware)
  */
-export async function hasPrivateKey(id: string): Promise<boolean> {
-  const key = await getPrivateKey(id);
+export async function hasPrivateKey(keyId: string, address: string): Promise<boolean> {
+  const key = await getPrivateKey(keyId, address);
   return !!key;
 }
 
@@ -95,4 +98,49 @@ export async function clearKeys(): Promise<void> {
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
   });
+}
+
+/**
+ * Delete a private key (address-aware)
+ */
+export async function deletePrivateKey(keyId: string, address: string): Promise<void> {
+  const prefixedId = `${KEY_PREFIX}${address.toLowerCase()}`;
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([STORE_NAME], 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const request = store.delete(prefixedId);
+
+    request.onsuccess = () => {
+      console.log(`Deleted key: ${prefixedId}`);
+      resolve();
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+/**
+ * Cleanup legacy role-specific keys (one-time, optional)
+ */
+export async function cleanupLegacyKeys(address: string): Promise<void> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction([STORE_NAME], 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      
+      // Delete old IDs (non-prefixed)
+      const legacyRequests = [
+        store.delete('patientPrivateKey'),
+        store.delete('adminPrivateKey'),
+      ];
+      
+      Promise.allSettled(legacyRequests).then(() => {
+        console.log('🧹 Cleaned up legacy keys');
+        resolve();
+      }).catch(reject);
+    });
+  } catch (error) {
+    console.warn('Legacy cleanup failed (safe to ignore):', error);
+  }
 }

@@ -3,11 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Clock, CheckCircle, XCircle, FileText, ChevronDown, Eye } from 'lucide-react';
 import { BigNumber, ethers } from 'ethers';
-import { getRole, getAdminPublicKey, getPendingRequestsByAdmin, getAcknowledgedRequestsByAdmin, approveUpgrade, rejectRequest, getAllUsers } from '@/lib/integration';
+import { getRole, getPendingRequestsByAdmin, getAcknowledgedRequestsByAdmin, approveUpgrade, rejectRequest, getAllUsers } from '@/lib/integration';
 import { UserRole } from '../../../utils/userRole';
-import { generateAndRegisterAdminKey } from '@/lib/adminKeys';
 import DocumentViewerModal from '@/components/DocumentViewerModal';
 import useStore from '@/store/userStore';
+import { generateAndRegisterUserKey, getUserPublicKey } from '@/lib/userKeys'; // Unified imports only
+import { verifyRSAKeyPair } from '@/lib/integration'; // Address-aware verify
+import { cleanupLegacyKeys } from '@/lib/keyStorage'; // For one-time cleanup
 
 interface RoleUpgradeRequest {
   requestId: BigNumber;
@@ -56,44 +58,80 @@ const Dashboard = () => {
       const userRole = await getRole(address);
       console.log('User role:', UserRole[userRole]);
 
-      // Check and generate admin public key
-      if (userRole == UserRole.Admin) {
+      // NEW: Unified key check and generation for Admin (no old imports/fallbacks)
+      if (userRole === UserRole.Admin) {
+        // Cleanup legacy keys first (one-time)
+        await cleanupLegacyKeys(address);
+        console.log('🧹 Cleaned up legacy keys for admin', address);
+        
         const { hasPrivateKey } = await import('@/lib/keyStorage');
-        const publicKey = await getAdminPublicKey(address);
-        const hasLocalKey = await hasPrivateKey("adminPrivateKey");
+        const hasLocalKey = await hasPrivateKey('userPrivateKey', address); // Address-aware
+        let onChainPublicKey = await getUserPublicKey(address); // Unified fetch
 
-        if (!publicKey && !hasLocalKey) {
-          console.log('No public key generated has been generated for admin, creating one...');
-          await generateAndRegisterAdminKey();
-          console.log('Generated a public key for admin');
+        console.log('🔑 Fetched on-chain public key:', onChainPublicKey ? 'Present' : 'Missing');
+        console.log('🔑 Has local private key (userPrivateKey):', hasLocalKey);
+
+        if (!hasLocalKey || !onChainPublicKey) {
+          console.log('Missing keys - regenerating...');
+          console.log('Has local private key:', hasLocalKey);
+          console.log('Has on-chain public key:', !!onChainPublicKey);
+          
+          await generateAndRegisterUserKey(address); // Unified gen (waits for tx)
+          console.log('✅ New user keypair generated and registered.');
+          
+          // Re-fetch post-gen to confirm
+          onChainPublicKey = await getUserPublicKey(address);
+          if (!onChainPublicKey) {
+            console.error('❌ Failed to confirm on-chain key after generation');
+            setHasPublicKey(true); // Proceed optimistically
+            await fetchRequests(address); // Continue to fetch
+            return;
+          }
           setHasPublicKey(true);
-        } else if (publicKey && !hasLocalKey) {
-          console.error("❌ CRITICAL: Public key exists but private key is missing.");
-          // For development/testing: Regenerate keys to allow proceeding
-          console.log("⚠️ Regenerating admin keys to restore access (Old data will be lost)");
-          await generateAndRegisterAdminKey();
-          setHasPublicKey(true);
-        } else if (publicKey && hasLocalKey) {
-           console.log('Admin has valid keypair');
-           setHasPublicKey(true);
         } else {
-           // Case: No public key but has local key? Rare/Weird.
-           // Maybe register the public key? But we can't export it from non-extractable private key easily unless we stored public key too.
-           // For now, assume if we have private key, we probably registered it.
-           // Or we can just regenerate if public key is missing on chain (but that wipes local key).
-           if (!publicKey) {
-              console.log('Local key exists but not on-chain. Regenerating to ensure consistency.');
-              await generateAndRegisterAdminKey();
-              setHasPublicKey(true);
-           }
+          console.log('✅ Both keys found. Verifying match...');
+          
+          // Always verify (address-aware)
+          const isValid = await verifyRSAKeyPair(onChainPublicKey); // Pass address
+          console.log('Keypair verification result:', isValid);
+          
+          if (!isValid) {
+            console.error("❌ RSA keypair verification failed. Keys mismatch.");
+            
+            // Check for existing requests/data before regen (admin-specific)
+            const pending = await getPendingRequestsByAdmin(address);
+            if (pending.length > 0) {
+              const userChoice = confirm(
+                "Key mismatch detected!\n\nLocal private key doesn't match on-chain public key.\n\nRegenerating will lock existing access FOREVER.\n\nContinue and regenerate? (Refresh/reconnect wallet to retry.)"
+              );
+              if (!userChoice) {
+                console.log("❌ User aborted regeneration. Proceeding anyway.");
+                setHasPublicKey(true);
+                await fetchRequests(address); // Proceed to fetch
+                return;
+              }
+            }
+            
+            console.log("⚠️ Auto-regenerating keys (Old data will be lost)");
+            await generateAndRegisterUserKey(address);
+            onChainPublicKey = await getUserPublicKey(address);
+            localStorage.setItem('userPublicKey', onChainPublicKey || ''); // Unified LS
+            setHasPublicKey(true);
+            alert("Your keys were mismatched and have been automatically regenerated. Old encrypted data is no longer accessible.");
+          } else {
+            console.log('✅ Keypair verified successfully.');
+            // Sync localStorage
+            localStorage.setItem('userPublicKey', onChainPublicKey);
+            setHasPublicKey(true);
+          }
         }
+
+        // Fetch requests after key handling
+        await fetchRequests(address);
       }
 
-      // Fetch pending and processed requests
-      await fetchRequests(address);
-
+      // Fetch users (unchanged)
       console.log('Fetching users for admin dashboard...');
-      await getAllUsers();
       const allUsers = await getAllUsers();
 
       const usersWithRoles: User[] = await Promise.all(allUsers.map(async (user: User) => {
@@ -105,8 +143,10 @@ const Dashboard = () => {
       }));
 
       setUsers(usersWithRoles);
-      await getRole(allUsers[0].walletAddress);
-      console.log('First user role check:', await getRole(allUsers[0].walletAddress));
+      if (allUsers[0]) {
+        await getRole(allUsers[0].walletAddress);
+        console.log('First user role check:', await getRole(allUsers[0].walletAddress));
+      }
       console.log('Fetched all users for admin dashboard', allUsers);
     };
 
@@ -136,27 +176,6 @@ const Dashboard = () => {
     }
   };
 
-  // const displayUsers = async() => {
-  //   try{
-  //     const allUsers = await getAllUsers();
-
-  //   }
-  // }
-  // const fetchUsers = async () => {
-  //   try {
-  //     // Mock data for now
-  //     const mockUsers: User[] = [
-  //       { address: '0x123...abc', currentRole: 'Patient', status: 'Active' },
-  //       { address: '0x456...def', currentRole: 'Healthcare Provider', status: 'Active' },
-  //       { address: '0x789...ghi', currentRole: 'Insurance Provider', status: 'Active' },
-  //       { address: '0xabc...123', currentRole: 'Admin', status: 'Active' },
-  //     ];
-
-  //     setUsers(mockUsers);
-  //   } catch (error) {
-  //     console.error('Error fetching users:', error);
-  //   }
-  // };
 
   const handleViewDocuments = (request: RoleUpgradeRequest) => {
     setSelectedRequest(request);

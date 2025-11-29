@@ -6,23 +6,27 @@ import "./UserRegistry.sol";
 import "./MedicalRecords.sol";
 import "./AccessControl.sol";
 import "./RoleUpgrade.sol";
+import "./ClaimRequest.sol";
 
 contract HealthcareSystem is Med2ChainStructs {
     UserManagement private userRegistry;
     MedicalRecordsManagement private medicalRecords;
     AccessControlManagement private accessControl;
     RoleUpgrade private roleUpgrade;
+    ClaimRequest private claimRequest;
 
     constructor(
         address _userRegistry,
         address _medicalRecords,
         address _accessControl,
-        address _roleUpgrade
+        address _roleUpgrade,
+        address _claimRequest
     ) {
         userRegistry = UserManagement(_userRegistry);
         medicalRecords = MedicalRecordsManagement(_medicalRecords);
         accessControl = AccessControlManagement(_accessControl);
         roleUpgrade = RoleUpgrade(_roleUpgrade);
+        claimRequest = ClaimRequest(_claimRequest);
     }
 
     // Example wrapper: Register user via HealthcareSystem

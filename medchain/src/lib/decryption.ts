@@ -8,37 +8,48 @@ import {
 } from './integration';
 import { getPrivateKey } from './keyStorage';
 import { decryptAESKeyWithPrivateKey } from './webCryptoUtils';
-
-const PINATA_GATEWAY = process.env.NEXT_PUBLIC_PINATA_GATEWAY_URL;
-const PINATA_GATEWAY_TOKEN = process.env.NEXT_PUBLIC_PINATA_GATEWAY_TOKEN;
+import { ethers } from 'ethers';
 
 /**
- * Decrypt the AES key using admin's private RSA key
+ * Decrypt the AES key using user's private RSA key
+ * Now uses unified 'userPrivateKey' for all roles
  */
 export async function decryptAESKey(
   encryptedKeyHex: string,
-  keyId: string = 'patientPrivateKey' // Default to patient key, but can be 'adminPrivateKey'
+  address?: string // Optional: Fetches current signer if not provided
 ): Promise<string> {
   try {
     if (!encryptedKeyHex || encryptedKeyHex === '0x') {
       throw new Error('Encrypted AES key is empty or invalid');
     }
     
-    console.log('Decrypting AES key...');
+    // Fetch address if not provided
+    let currentAddress = address;
+    if (!currentAddress && window.ethereum) {
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      currentAddress = await provider.getSigner().getAddress();
+    }
+    if (!currentAddress) {
+      throw new Error('No wallet address available for key fetch');
+    }
+    
+    console.log('🔓 Decrypting AES key for address:', currentAddress);
     console.log('Raw encrypted key hex:', encryptedKeyHex);
     
-    // 1. Get private key handle from IndexedDB
-    const privateKey = await getPrivateKey(keyId);
+    // Get unified private key (address-aware)
+    const privateKey = await getPrivateKey('userPrivateKey', currentAddress);
     if (!privateKey) {
-      throw new Error(`Private key not found in IndexedDB for ID: ${keyId}. Please generate keys first.`);
+      throw new Error(`Private key not found for ${currentAddress}. Please generate keys first.`);
     }
 
-    // 2. Decrypt using WebCrypto
+    console.log('✅ Private key retrieved from IndexedDB');
+    
+    // Decrypt using WebCrypto
     const decryptedAESKey = await decryptAESKeyWithPrivateKey(encryptedKeyHex, privateKey);
-    console.log('AES Key decrypted successfully');
+    console.log('✅ AES Key decrypted successfully');
     return decryptedAESKey;
   } catch (error) {
-    console.error('Error decrypting AES key:', error);
+    console.error('❌ Error decrypting AES key:', error);
     throw error;
   }
 }
@@ -51,7 +62,7 @@ export function decryptDocumentContent(
   aesKeyHex: string
 ): any {
   try {
-    // Decrypt with AES using the key string directly (matching encryption method)
+    // Decrypt with AES using the key string directly
     const decrypted = CryptoJS.AES.decrypt(encryptedContent, aesKeyHex);
     const decryptedStr = decrypted.toString(CryptoJS.enc.Utf8);
 
@@ -68,7 +79,7 @@ export function decryptDocumentContent(
 }
 
 /**
- * Fetch and decrypt documents for a specific request
+ * Fetch and decrypt documents for a specific request (Admin/Healthcare Provider)
  */
 export async function fetchAndDecryptDocuments(requestId: number) {
   try {
@@ -79,9 +90,9 @@ export async function fetchAndDecryptDocuments(requestId: number) {
     const encryptedKeyHex = await getEncryptedKey(requestId);
     console.log('Encrypted key (hex):', encryptedKeyHex);
 
-    // 2. Decrypt the AES key (using admin private key)
+    // 2. Decrypt the AES key (using unified userPrivateKey)
     console.log('Decrypting AES key...');
-    const aesKeyHex = await decryptAESKey(encryptedKeyHex, 'adminPrivateKey');
+    const aesKeyHex = await decryptAESKey(encryptedKeyHex);
     console.log('AES key decrypted successfully');
 
     // 3. Get the CID from the request
@@ -99,7 +110,7 @@ export async function fetchAndDecryptDocuments(requestId: number) {
         try {
           console.log(`Fetching document from IPFS: ${cidObj.cid}`);
 
-          // Fetch encrypted content from IPFS via backend proxy (to avoid CORS)
+          // Fetch encrypted content from IPFS via backend proxy
           const response = await fetch(
             `http://localhost:8080/api/upload/fetchFromIPFS/${cidObj.cid}`
           );
@@ -140,6 +151,9 @@ export async function fetchAndDecryptDocuments(requestId: number) {
   }
 }
 
+/**
+ * Fetch and decrypt patient record (Patient viewing their own records)
+ */
 export async function fetchAndDecryptPatientRecord(
   patientAddress: string,
   recordId: string
@@ -164,8 +178,8 @@ export async function fetchAndDecryptPatientRecord(
     }
 
     console.log('🔓 Attempting to decrypt AES key...');
-    // Decrypt using patient private key
-    const aesKeyHex = await decryptAESKey(encryptedKeyHex, 'patientPrivateKey');
+    // Decrypt using unified userPrivateKey
+    const aesKeyHex = await decryptAESKey(encryptedKeyHex);
 
     const record = await getMedicalRecord(patientAddress, recordId);
     const cid = record?.cid;

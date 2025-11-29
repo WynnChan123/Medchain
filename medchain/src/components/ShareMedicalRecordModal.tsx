@@ -68,7 +68,7 @@ const ShareMedicalRecordModal = ({ isOpen, onClose, selectedUser, setSelectedPat
       
       // Check if private key exists in IndexedDB
       const { hasPrivateKey } = await import('@/lib/keyStorage');
-      const hasKey = await hasPrivateKey('patientPrivateKey');
+      const hasKey = await hasPrivateKey('userPrivateKey', userAddress); // Use unified ID
       
       if(!hasKey){
         setError("Private key not found. Please ensure you are logged in correctly.");
@@ -76,8 +76,7 @@ const ShareMedicalRecordModal = ({ isOpen, onClose, selectedUser, setSelectedPat
         return;
       }
       
-      // Pass the ID 'patientPrivateKey', not the key itself
-      const aesKey = await decryptAESKey(patientEncryptedKey, 'patientPrivateKey');
+      const aesKey = await decryptAESKey(patientEncryptedKey, userAddress);
 
       const recipientPublicKey = await getAdminPublicKey(selectedUser);
       const encryptedKeyForRecipient = await encryptWithPublicKey(aesKey, recipientPublicKey);

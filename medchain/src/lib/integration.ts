@@ -5,6 +5,7 @@ import CryptoJS from 'crypto-js';
 import NodeRSA from 'node-rsa';
 import { read } from 'node:fs';
 import { decryptAESKey } from './decryption';
+import { getPrivateKey } from './keyStorage';
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_SMART_CONTRACT_ADDRESS!;
 const UPGRADE_ADDRESS = process.env.NEXT_PUBLIC_ROLE_UPGRADE_ADDRESS!;
@@ -30,7 +31,7 @@ interface CachedABI {
   timestamp: number;
 }
 
-async function fetchAbiFromEtherscan(address: string): Promise<any> {
+export async function fetchAbiFromEtherscan(address: string): Promise<any> {
   try {
     const addressLower = address.toLowerCase();
     const cacheKey = `${ABI_CACHE_KEY_PREFIX}${addressLower}`;
@@ -988,19 +989,17 @@ export async function checkWhoHasAccess(recordId: string) {
     throw error;
   }
 }
-
 export async function getSharedRecordsWithDetails(userAddress: string) {
   try {
     console.log('📋 Getting shared records for:', userAddress);
 
-    // Verify private key exists FIRST (IndexedDB)
+    // NEW: Verify unified private key exists FIRST (IndexedDB)
     const { hasPrivateKey } = await import('./keyStorage');
-    const hasAdminKey = await hasPrivateKey('adminPrivateKey');
-    const hasPatientKey = await hasPrivateKey('patientPrivateKey');
+    const hasUserKey = await hasPrivateKey('userPrivateKey', userAddress);
     
-    if (!hasAdminKey && !hasPatientKey) {
-      console.warn('⚠️ No private keys found in IndexedDB');
-      throw new Error('No private keys available. Please generate keys first.');
+    if (!hasUserKey) {
+      console.warn('⚠️ No user private key found in IndexedDB');
+      throw new Error('No private key available. Please generate keys first.');
     }
 
     // 1. Get list of shared records
@@ -1099,21 +1098,19 @@ export async function fetchAndDecryptSharedRecord(
       throw new Error('No encrypted key found for this record. Access might not have been granted correctly.');
     }
 
-    // 3. Decrypt AES key with recipient's private key
+    // NEW: Decrypt AES key with unified user private key
     const { hasPrivateKey } = await import('./keyStorage');
-    const hasPatientKey = await hasPrivateKey('patientPrivateKey');
-    const hasAdminKey = await hasPrivateKey('adminPrivateKey');
+    const hasUserKey = await hasPrivateKey('userPrivateKey', recipientAddress);
 
     console.log('🔍 Debug - Available keys (IndexedDB):', {
-      hasPatientKey,
-      hasAdminKey,
+      hasUserKey,
       encryptedAESKeyValue: encryptedAESKey,
       encryptedAESKeyType: typeof encryptedAESKey,
       encryptedAESKeyLength: encryptedAESKey?.length
     });
 
-    if (!hasPatientKey && !hasAdminKey) {
-      throw new Error('No private key found (neither patient nor admin)');
+    if (!hasUserKey) {
+      throw new Error('No user private key found. Please initialize keys in your dashboard.');
     }
 
     if (!encryptedAESKey || encryptedAESKey === '0x' || encryptedAESKey === '0x0') {
@@ -1123,34 +1120,18 @@ export async function fetchAndDecryptSharedRecord(
     let aesKey: string | null = null;
     let decryptionError: any = null;
 
-    // Try patient key first if available
-    // Try patient key first if available
-    if (hasPatientKey) {
-      try {
-        console.log('🔓 Trying to decrypt with patient key...');
-        aesKey = await decryptAESKey(encryptedAESKey, 'patientPrivateKey');
-        console.log('✅ Decrypted with patient key');
-      } catch (err) {
-        console.log('❌ Failed to decrypt with patient key:', err);
-        decryptionError = err;
-      }
-    }
-
-    // If patient key failed or wasn't available, try admin key
-    if (!aesKey && hasAdminKey) {
-      try {
-        console.log('🔓 Trying to decrypt with admin key...');
-        aesKey = await decryptAESKey(encryptedAESKey, 'adminPrivateKey');
-        console.log('✅ Decrypted with admin key');
-      } catch (err) {
-        console.log('❌ Failed to decrypt with admin key:', err);
-        decryptionError = err;
-      }
+    try {
+      console.log('🔓 Trying to decrypt with user private key...');
+      aesKey = await decryptAESKey(encryptedAESKey, recipientAddress); // Unified: No keyId needed
+      console.log('✅ AES key decrypted with user key');
+    } catch (err) {
+      console.log('❌ Failed to decrypt with user key:', err);
+      decryptionError = err;
     }
 
     if (!aesKey) {
       throw new Error(
-        `Failed to decrypt AES key with any available private key. Last error: ${
+        `Failed to decrypt AES key. Ensure your keys are registered and match the shared public key. Last error: ${
           decryptionError?.message || 'Unknown error'
         }`
       );
@@ -1227,13 +1208,13 @@ export async function getCreatedRecords(doctorAddress: string) {
 }
 
 
-export async function verifyRSAKeyPair(publicKey: string, keyId: string) {
+export async function verifyRSAKeyPair(publicKey: string): Promise<boolean> {
   try {
     // Generate a valid hex string (32 chars / 16 bytes) to mimic an AES key
     const testValue = CryptoJS.lib.WordArray.random(16).toString();
 
     const encrypted = await encryptWithPublicKey(testValue, publicKey);
-    const decrypted = await decryptAESKey(encrypted, keyId);
+    const decrypted = await decryptAESKey(encrypted);
 
     return decrypted === testValue;
   } catch (err) {

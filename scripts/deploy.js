@@ -36,12 +36,22 @@ async function main() {
   await userManagement.authorizeContract(await roleUpgrade.getAddress());
   console.log("RoleUpgrade contract authorized");
 
+  const requestClaim = await ethers.getContractFactory("ClaimRequest");
+  const claimContract = await requestClaim.deploy(
+    await userManagement.getAddress(),
+    await medicalRecords.getAddress(),
+    await accessControl.getAddress()
+  );
+  await claimContract.waitForDeployment();
+  console.log("RequestClaim deployed to:", await claimContract.getAddress());
+
   const HealthcareSystem = await ethers.getContractFactory("HealthcareSystem");
   const healthcareSystem = await HealthcareSystem.deploy(
     await userManagement.getAddress(),
     await medicalRecords.getAddress(),
     await accessControl.getAddress(),
-    await roleUpgrade.getAddress()
+    await roleUpgrade.getAddress(),
+    await claimContract.getAddress()
   );
   await healthcareSystem.waitForDeployment();
   console.log("HealthcareSystem deployed to:", await healthcareSystem.getAddress());

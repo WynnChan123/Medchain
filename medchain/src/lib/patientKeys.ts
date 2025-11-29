@@ -1,44 +1,55 @@
 import { readUpgradeContract, writeUpgradeContract } from "./integration";
 import { generateRSAKeyPair, exportPublicKeyToPEM } from "./webCryptoUtils";
 import { storePrivateKey } from "./keyStorage";
+import { ethers } from "ethers";
 
-export async function generateAndRegisterPatientKey() {
+export async function generateAndRegisterPatientKey(userAddress?: string): Promise<string> {
   try {
-    console.log('Generating RSA key pair for patient (WebCrypto)...');
+    const address = userAddress || await getSignerAddress(); // Use signer if not passed
+    console.log(`Generating RSA key pair for patient ${address}...`);
     
-    // 1. Generate RSA key pair (non-extractable private key)
+    // 1-3. Unchanged: Gen pair, export PEM, store private
     const keyPair = await generateRSAKeyPair();
-    
-    // 2. Export public key to PEM for on-chain registration
     const publicKeyPEM = await exportPublicKeyToPEM(keyPair.publicKey);
-    
-    console.log('Keys generated successfully');
-    console.log('Public key preview:', publicKeyPEM.substring(0, 100) + '...');
-    
-    // 3. Store private key handle in IndexedDB
-    await storePrivateKey("patientPrivateKey", keyPair.privateKey);
-    console.log('Patient private key stored in IndexedDB (non-extractable)');
-    
-    // Clear any old keys from localStorage to avoid confusion
-    localStorage.removeItem("patientPrivateKey");
+    await storePrivateKey("patientPrivateKey", keyPair.privateKey, address);
+    localStorage.removeItem("patientPublicKey"); // Clear old
 
-    // 4. Register public key on-chain
-    console.log('Registering public key on blockchain...');
+    console.log('Keys generated/stored. Public preview:', publicKeyPEM.substring(0, 100) + '...');
+    
+    // 4. Register on-chain (reuse admin method—works for any addr)
+    console.log('Registering public key on-chain...');
     const contract = await writeUpgradeContract();
     const tx = await contract.registerAdminPublicKey(publicKeyPEM);
-    console.log('Transaction sent, waiting for confirmation...');
-    await tx.wait();
+    console.log('Tx sent:', tx.hash);
+    const receipt = await tx.wait(1);
+    if (receipt.status !== 1) {
+      throw new Error(`Registration failed: ${tx.hash}`);
+    }
 
-    console.log("✅ Patient public key registered on-chain successfully!");
-    
-    // Store public key locally to detect stale chain data
-    localStorage.setItem('patientPublicKey', publicKeyPEM);
-    
+    // NEW: Immediate re-fetch to confirm on-chain update
+    const confirmedKey = await getPatientPublicKey(address);
+    if (confirmedKey.trim() !== publicKeyPEM.trim()) {
+      console.warn('⚠️ On-chain confirmation mismatch—possible indexer lag. Retrying fetch...');
+      await new Promise(resolve => setTimeout(resolve, 3000)); // 3s delay
+      const retryKey = await getPatientPublicKey(address);
+      if (retryKey.trim() !== publicKeyPEM.trim()) {
+        throw new Error('On-chain key not updated after tx—check RPC/indexer');
+      }
+    }
+
+    console.log("✅ Public key confirmed on-chain!");
+    localStorage.setItem('patientPublicKey', publicKeyPEM); // Sync local
     return publicKeyPEM;
   } catch (error) {
-    console.error('Error in generateAndRegisterPatientKey:', error);
+    console.error('Error generating/registering patient key:', error);
     throw error;
   }
+}
+
+async function getSignerAddress(): Promise<string> {
+  if (!window.ethereum) throw new Error('No Web3 provider');
+  const provider = new ethers.providers.Web3Provider(window.ethereum);
+  return await provider.getSigner().getAddress();
 }
 
 export async function getPatientPublicKey(patientAddress: string): Promise<string> {
