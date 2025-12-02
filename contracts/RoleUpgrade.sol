@@ -7,6 +7,8 @@ contract RoleUpgrade is Med2ChainStructs {
     address public admin;
     uint public requestId;
     address[] private adminList;
+    address[] private insurerList;
+    address[] private providerList;
 
     address public userManagementContract;
     address public medicalRecordsContract;
@@ -21,6 +23,18 @@ contract RoleUpgrade is Med2ChainStructs {
         address requester;
         uint256 timestamp;
         string cid;
+    }
+
+    struct InsurerProfile {
+        string companyName;
+        bool isRegistered;
+        uint256 registrationTimestamp;
+    }
+
+    struct ProviderProfile {
+        string doctorName;
+        bool isRegistered;
+        uint256 registrationTimestamp;
     }
 
     // Map request ID to the full request struct
@@ -40,6 +54,15 @@ contract RoleUpgrade is Med2ChainStructs {
 
     // Map admins to the user pending requests
     mapping(address => uint[]) public adminToRequests;
+
+    //Map insurer to insurer profile
+    mapping(address => InsurerProfile) public insurerProfiles;
+
+    //Map provider to provider profile
+    mapping(address => ProviderProfile) public providerProfiles;
+
+    //Map company name to bool to check uniqueness
+    mapping(string => bool) public registeredCompanyNames;
 
 
     event RoleUpgradeRequested(uint requestId, userRole newRole, address indexed requester, address[] admins, uint256 timestamp);
@@ -79,7 +102,15 @@ contract RoleUpgrade is Med2ChainStructs {
         adminList.push(msg.sender);
     }
 
-    function submitUpgradeRequest(address patient, string calldata cid, userRole newRole, address[] calldata admins, bytes[] calldata encryptedKey) external {
+    function submitUpgradeRequest(
+        address patient, 
+        string calldata cid, 
+        userRole newRole, 
+        address[] calldata admins, 
+        bytes[] calldata encryptedKey,
+        string calldata companyName,
+        string calldata doctorName
+    ) external {
         require(IUserManagement(userManagementContract).users(patient).walletAddress != address(0), "User not registered");
         require(IUserManagement(userManagementContract).users(patient).isActive, "User is not active");
         require(IUserManagement(userManagementContract).getUserRole(patient) != userRole.Admin, "Admin cannot request role upgrade");
@@ -91,6 +122,15 @@ contract RoleUpgrade is Med2ChainStructs {
             if (!requests[existingRequestId].isProcessed) {
                 revert("You have an active request pending");
             }
+        }
+
+        if(newRole == userRole.Insurer){
+            require(bytes(companyName).length > 0, "Company name cannot be empty for insurer role");
+            require(!registeredCompanyNames[companyName], "Company name already registered");
+        }
+
+        if(newRole == userRole.HealthcareProvider){
+            require(bytes(doctorName).length > 0, "Doctor name cannot be empty for healthcare provider role");
         }
 
         requestId++;
@@ -118,7 +158,11 @@ contract RoleUpgrade is Med2ChainStructs {
         return requests[_requestId].adminAddresses;
     }
 
-    function approveRequest(uint _requestId, address userToUpgrade) external onlyAuthorizedAdmin(_requestId) {
+    function approveRequest(
+        uint _requestId, 
+        address userToUpgrade, 
+        string calldata roleName
+    ) external onlyAuthorizedAdmin(_requestId) {
         RoleUpgradeRequest storage request = requests[_requestId];
         require(request.requestId > 0 , "Request does not exist");
 
@@ -126,6 +170,23 @@ contract RoleUpgrade is Med2ChainStructs {
 
         if(request.newRole == userRole.Admin){
             adminList.push(userToUpgrade);
+        }else if(request.newRole == userRole.Insurer){
+            require(bytes(roleName).length > 0, "Company name required for insurer");
+            registeredCompanyNames[roleName] = true;
+            insurerProfiles[userToUpgrade] = InsurerProfile({
+                companyName: roleName,
+                isRegistered: true,
+                registrationTimestamp: block.timestamp
+            });
+            insurerList.push(userToUpgrade);
+        }else if(request.newRole == userRole.HealthcareProvider){
+            require(bytes(roleName).length > 0, "Doctor name required for provider");
+            providerProfiles[userToUpgrade] = ProviderProfile({
+                doctorName: roleName,
+                isRegistered: true,
+                registrationTimestamp: block.timestamp
+            });
+            providerList.push(userToUpgrade);
         }
 
         requests[_requestId].isApproved = true;
@@ -134,6 +195,7 @@ contract RoleUpgrade is Med2ChainStructs {
 
         emit RoleUpgradeApproved(_requestId, userToUpgrade, msg.sender, block.timestamp);
     }
+
 
     function rejectRequest(uint _requestId) external onlyAuthorizedAdmin(_requestId) {
         RoleUpgradeRequest storage request = requests[_requestId];
@@ -168,6 +230,32 @@ contract RoleUpgrade is Med2ChainStructs {
 
     function getAdmins() external view returns (address[] memory){        
         return adminList;
+    }
+
+    function getAllInsurers() external view returns (address[] memory addresses, string[] memory names) {
+        uint256 count = insurerList.length;
+        addresses = new address[](count);
+        names = new string[](count);
+        
+        for(uint i = 0; i < count; i++) {
+            addresses[i] = insurerList[i];
+            names[i] = insurerProfiles[insurerList[i]].companyName;
+        }
+        
+        return (addresses, names);
+    }
+
+    function getAllProviders() external view returns (address[] memory addresses, string[] memory names) {
+        uint256 count = providerList.length;
+        addresses = new address[](count);
+        names = new string[](count);
+        
+        for(uint i = 0; i < count; i++) {
+            addresses[i] = providerList[i];
+            names[i] = providerProfiles[providerList[i]].doctorName;
+        }
+        
+        return (addresses, names);
     }
 
     function registerAdminPublicKey(string calldata _publicKey) external {

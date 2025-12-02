@@ -114,14 +114,24 @@ contract UserManagement is Med2ChainStructs {
         return allUsers;
     }
 
-    // function assignRoles(address user, userRole role)  external {
-    //     require(userRoles[msg.sender][userRole.Admin] == true, "Only admins are allowed to define roles");
-    //     require(users[user].walletAddress != address(0), "User not registered");
+    function getAllPatientAddresses() external view returns (address[] memory) {
+        uint count = 0;
+        for (uint i = 0; i < userAddresses.length; i++) {
+            if (userRoles[userAddresses[i]][userRole.Patient]) {
+                count++;
+            }
+        }
 
-    //     userRoles[user][role] = true;
-
-    //     emit RoleDefined(user, role, block.timestamp);
-    // }
+        address[] memory patients = new address[](count);
+        uint index = 0;
+        for (uint i = 0; i < userAddresses.length; i++) {
+            if (userRoles[userAddresses[i]][userRole.Patient]) {
+                patients[index] = userAddresses[i];
+                index++;
+            }
+        }
+        return patients;
+    }
 
     function setUserRole(address user, userRole newRole) external {
         require(userRoles[msg.sender][userRole.Admin] == true || authorizedContracts[msg.sender], "Only admins are allowed to set additional roles");
