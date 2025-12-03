@@ -1,5 +1,4 @@
 import { addMedicalRecord, encryptWithPublicKey, fileToBase64, getAdminPublicKey, getAllUsers, getRole } from '@/lib/integration';
-import { getPatientPublicKey } from '@/lib/patientKeys';
 import { X } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { UserRole } from '../../utils/userRole';

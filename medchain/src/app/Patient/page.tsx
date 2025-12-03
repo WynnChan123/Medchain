@@ -13,6 +13,8 @@ import {
   checkWhoHasAccess,
   verifyRSAKeyPair,
   revokeAccess,
+  getClaimsByPatient,
+  getClaimDetails,
 } from '@/lib/integration';
 import { UserRole } from '../../../utils/userRole';
 import PatientRecordViewerModal from '@/components/PatientRecordViewerModal';
@@ -21,6 +23,7 @@ import ShareMedicalRecordModal from '@/components/ShareMedicalRecordModal';
 import SharedDocumentsTable from '@/components/SharedDocumentsTable';
 import { useRouter } from 'next/navigation';
 import { generateAndRegisterUserKey, getUserPublicKey } from '@/lib/userKeys';
+import SubmitClaimModal from '@/components/SubmitClaimModal';
 
 interface medicalDocuments {
   recordId: string;
@@ -55,6 +58,7 @@ const PatientDashboard = () => {
     null
   );
   const [viewDocumentModal, setViewDocumentModal] = useState<boolean>(false);
+  const [isClaimModalOpen, setIsClaimModalOpen] = useState<boolean>(false);
   const [medicalRecords, setMedicalRecords] = useState<medicalDocuments[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -67,6 +71,8 @@ const PatientDashboard = () => {
   const [sharedWith, setSharedWith] = useState<SharedRecord[]>([]);
   const [loadingShared, setLoadingShared] = useState(false);
   const [userAddress, setUserAddress] = useState("");
+  const [myClaims, setMyClaims] = useState<any[]>([]);
+  const [loadingClaims, setLoadingClaims] = useState(false);
   const router = useRouter();
 
 useEffect(() => {
@@ -191,6 +197,12 @@ useEffect(() => {
     console.log('Success');
   };
 
+  const handleSubmitClaim = (record: medicalDocuments) => {
+    setSelectedDocument(record);
+    setIsClaimModalOpen(true);
+    console.log('Submit Claim clicked for record:', record);
+  }
+
   const fetchMedicalRecords = async (patientAddress: string) => {
     setLoading(true);
     try {
@@ -271,6 +283,34 @@ useEffect(() => {
       fetchSharedAccess();
     }
   }, [medicalRecords]);
+
+  useEffect(() => {
+    const fetchClaims = async () => {
+      if (!walletAddress) return;
+      setLoadingClaims(true);
+      try {
+        const claimIds = await getClaimsByPatient(walletAddress);
+        const details = await getClaimDetails(claimIds);
+        
+        const formatted = details.map((c: any) => ({
+          ...c,
+          claimId: c.claimId.toNumber(),
+          requestedAmount: c.requestedAmount.toNumber(),
+          approvedAmount: c.approvedAmount.toNumber(),
+          status: c.status,
+          submittedTimestamp: c.submittedTimestamp.toNumber(),
+        }));
+        
+        setMyClaims(formatted.reverse());
+      } catch (error) {
+        console.error('Error fetching claims:', error);
+      } finally {
+        setLoadingClaims(false);
+      }
+    };
+    
+    fetchClaims();
+  }, [walletAddress]);
 
   const handleShareToUser = async (record: medicalDocuments) => {
     setSelectedDocument(record);
@@ -397,6 +437,9 @@ useEffect(() => {
                   <th className="text-left text-gray-400 py-3 px-4 text-sm">
                     Share
                   </th>
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">
+                    Claims
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -438,6 +481,14 @@ useEffect(() => {
                         <Share2 />
                       </button>
                     </td>
+                    <td className="py-3 px-4">
+                      <button
+                        onClick={() => handleSubmitClaim(record)}
+                        className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm flex items-center gap-1"
+                      >
+                      <FileText size={14} /> Submit Claim
+                    </button>
+                  </td>
                   </tr>
                 ))}
               </tbody>
@@ -516,6 +567,57 @@ useEffect(() => {
         )}
       </div>
 
+      {/* My Claims */}
+      <div className="bg-gray-900 rounded-lg p-6 border border-gray-700">
+        <h3 className="text-white text-lg font-semibold mb-4">My Claims</h3>
+        {loadingClaims ? (
+          <div className="text-center py-4 text-gray-400">Loading claims...</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-700">
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">ID</th>
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">Type</th>
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">Description</th>
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">Amount</th>
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">Status</th>
+                  <th className="text-left text-gray-400 py-3 px-4 text-sm">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {myClaims.length > 0 ? (
+                  myClaims.map((claim) => (
+                    <tr key={claim.claimId} className="border-b border-gray-800 hover:bg-gray-800">
+                      <td className="text-white py-3 px-4 text-sm">#{claim.claimId}</td>
+                      <td className="text-gray-300 py-3 px-4 text-sm">
+                        <span className="bg-blue-900 text-blue-200 px-2 py-1 rounded text-xs">{claim.claimType}</span>
+                      </td>
+                      <td className="text-gray-300 py-3 px-4 text-sm max-w-xs truncate">{claim.description}</td>
+                      <td className="text-white py-3 px-4 text-sm font-semibold">${claim.requestedAmount}</td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                          claim.status === 0 ? 'bg-amber-900 text-amber-200' :
+                          claim.status === 1 ? 'bg-green-900 text-green-200' :
+                          'bg-red-900 text-red-200'
+                        }`}>
+                          {claim.status === 0 ? 'Pending' : claim.status === 1 ? 'Approved' : 'Rejected'}
+                        </span>
+                      </td>
+                      <td className="text-gray-400 py-3 px-4 text-sm italic max-w-xs truncate">{claim.notes || '-'}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="text-center py-4 text-gray-500">No claims submitted yet.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {/* Shared Documents Table */}
       <SharedDocumentsTable walletAddress={walletAddress} />
 
@@ -553,6 +655,14 @@ useEffect(() => {
           setSelectedPatient={setSelectedUser}
           record={selectedDocument}
           onSuccess={handleShareSuccess}
+        />
+      )}
+
+      {isClaimModalOpen && selectedDocument && (
+        <SubmitClaimModal
+          isOpen={isClaimModalOpen}
+          onClose={() => setIsClaimModalOpen(false)}
+          record={selectedDocument}
         />
       )}
     </div>

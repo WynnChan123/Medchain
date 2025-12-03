@@ -28,6 +28,7 @@ interface DecryptedDocument {
     additionalInfo: string;
     patient: string;
     timestamp: string;
+    doctorName?: string;
   };
 }
 
@@ -153,6 +154,14 @@ const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
                           {doc.metadata.organization}
                         </span>
                       </div>
+                      {doc.metadata.role === 'healthcare' && doc.metadata.doctorName && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-400">Doctor Name:</span>
+                          <span className="text-white">
+                            {doc.metadata.doctorName}
+                          </span>
+                        </div>
+                      )}
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-400">Role Requested:</span>
                         <span className="text-blue-400 capitalize">

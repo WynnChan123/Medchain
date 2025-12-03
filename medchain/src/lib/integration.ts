@@ -6,12 +6,15 @@ import NodeRSA from 'node-rsa';
 import { read } from 'node:fs';
 import { decryptAESKey } from './decryption';
 import { getPrivateKey } from './keyStorage';
+import { getUserPublicKey } from './userKeys';
+import { encryptAESKeyWithPublicKey } from './webCryptoUtils';
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_SMART_CONTRACT_ADDRESS!;
 const UPGRADE_ADDRESS = process.env.NEXT_PUBLIC_ROLE_UPGRADE_ADDRESS!;
 const USER_MANAGEMENT_ADDRESS = process.env.NEXT_PUBLIC_USER_MANAGEMENT!;
 const MEDICAL_RECORDS_ADDRESS = process.env.NEXT_PUBLIC_MEDICAL_RECORDS!;
 const ACCESS_CONTROL_ADDRESS = process.env.NEXT_PUBLIC_ACCESS_CONTROL!;
+const CLAIM_REQUEST_ADDRESS = process.env.NEXT_PUBLIC_CLAIM_REQUEST!;
 
 export interface User {
   role: UserRole;
@@ -182,6 +185,27 @@ export async function readAccessControlContract() {
   return new ethers.Contract(ACCESS_CONTROL_ADDRESS, abi, provider);
 }
 
+export async function writeClaimRequestContract() {
+  if (!window.ethereum) throw new Error('MetaMask not found');
+  await (window.ethereum as any).request({ method: 'eth_requestAccounts' });
+
+  const provider = new ethers.providers.Web3Provider(window.ethereum);
+  const signer = await provider.getSigner();
+
+  const abi = await fetchAbiFromEtherscan(CLAIM_REQUEST_ADDRESS);
+  return new ethers.Contract(CLAIM_REQUEST_ADDRESS, abi, signer);
+}
+
+export async function readClaimRequestContract() {
+  if (!window.ethereum) throw new Error('MetaMask not found');
+  await (window.ethereum as any).request({ method: 'eth_requestAccounts' });
+
+  const provider = new ethers.providers.Web3Provider(window.ethereum);
+
+  const abi = await fetchAbiFromEtherscan(CLAIM_REQUEST_ADDRESS);
+  return new ethers.Contract(CLAIM_REQUEST_ADDRESS, abi, provider);
+}
+
 export async function registerUser(
   wallet: string,
   encryptedId: string,
@@ -229,7 +253,9 @@ export async function requestRoleUpgrade(
   cid: string,
   admins: string[],
   newRole: UserRole,
-  encryptedKeys: string[]
+  encryptedKeys: string[],
+  companyName: string,
+  doctorName: string
 ) {
   try {
     const contract = await writeUpgradeContract();
@@ -238,7 +264,9 @@ export async function requestRoleUpgrade(
       cid,
       newRole,
       admins,
-      encryptedKeys
+      encryptedKeys,
+      companyName,
+      doctorName
     );
     return await tx.wait();
   } catch (error) {
@@ -287,7 +315,7 @@ export async function shareMedicalRecord(
     throw error;
   }
 }
-
+//integration.ts
 export async function submitRoleUpgradeRequest(
   patientAddress: string,
   files: { id: File; license: File; proof: File },
@@ -295,9 +323,12 @@ export async function submitRoleUpgradeRequest(
     role: string;
     organization: string;
     additionalInfo: string;
+    doctorName?: string;
   },
   selectedAdmins: string[],
-  adminPublicKeys: string[]
+  adminPublicKeys: string[],
+  companyName: string,
+  doctorName: string
 ) {
   try {
     //Take each file from the user's computer
@@ -309,6 +340,8 @@ export async function submitRoleUpgradeRequest(
     console.log('adminPublicKeys:', adminPublicKeys);
     console.log('adminPublicKeys length:', adminPublicKeys?.length);
     console.log('metadata:', metadata);
+    console.log('Doctor Name:', doctorName);
+    console.log('Company Name:', companyName);
 
     // Validate files before processing
     console.log('=== [CHECKPOINT 1] Files validation ===');
@@ -524,7 +557,19 @@ export async function submitRoleUpgradeRequest(
       throw new Error(`Invalid role: ${metadata.role}`);
     }
 
+    if(roleEnum === UserRole.Insurer){
+      companyName = metadata.organization;
+      doctorName = '';
+    }else if(roleEnum === UserRole.HealthcareProvider){
+      companyName = '';
+      doctorName = doctorName;
+    }else{
+      companyName = '';
+      doctorName = '';
+    }
+
     console.log('Role enum:', roleEnum);
+
     console.log('Submitting to blockchain...');
 
     const receipt = await requestRoleUpgrade(
@@ -532,7 +577,9 @@ export async function submitRoleUpgradeRequest(
       JSON.stringify(uploadResults),
       selectedAdmins,
       roleEnum,
-      encryptedKeys
+      encryptedKeys,
+      companyName,  
+      doctorName
     );
 
     console.log(
@@ -576,10 +623,10 @@ export async function encryptWithPublicKey(
   return encryptedKeyHex;
 }
 
-export async function approveUpgrade(requestId: number, userToUpgrade: string) {
+export async function approveUpgrade(requestId: number, userToUpgrade: string, roleName: string) {
   try {
     const contract = await writeUpgradeContract();
-    const tx = await contract.approveRequest(requestId, userToUpgrade);
+    const tx = await contract.approveRequest(requestId, userToUpgrade, roleName);
     return tx.wait();
   } catch (error) {
     console.error('Failed to approve upgrade request: ', error);
@@ -754,6 +801,268 @@ export async function getAdminPublicKey(adminAddress: string) {
     return tx;
   } catch (error) {
     console.log("Failed to get admin's public key", error);
+    throw error;
+  }
+}
+
+// ==========================================
+// CLAIMS INTEGRATION
+// ==========================================
+
+export async function getInsurers() {
+  try {
+    const contract = await readUpgradeContract();
+    const result = await contract.getAllInsurers();
+    // result is [addresses[], names[]]
+    const insurers = result[0].map((address: string, index: number) => ({
+      address,
+      name: result[1][index]
+    }));
+    return insurers;
+  } catch (error) {
+    console.error('Error fetching insurers:', error);
+    return [];
+  }
+}
+
+export async function submitClaim(
+  insurerAddress: string,
+  recordId: string,
+  requestedAmount: number,
+  claimType: string,
+  description: string,
+  files: { photos: File[], documents: File[] }
+) {
+  try {
+    console.log('=== Starting Claim Submission ===');
+    
+    // 1. Get Insurer's Public Key
+    const insurerPublicKey = await getUserPublicKey(insurerAddress);
+    if (!insurerPublicKey) {
+      throw new Error('Selected insurer does not have a registered public key for encryption.');
+    }
+
+    // 2. Generate AES Key
+    const aesKey = CryptoJS.lib.WordArray.random(32);
+    const aesKeyHex = aesKey.toString(CryptoJS.enc.Hex);
+    console.log('Generated AES Key');
+
+    // 3. Process and Encrypt Files
+    const allFiles = [...files.photos, ...files.documents];
+    const encryptedFiles = [];
+
+    for (const file of allFiles) {
+      const base64 = await fileToBase64(file);
+      const fileData = JSON.stringify({
+        name: file.name,
+        type: file.type,
+        content: base64
+      });
+      
+      const encryptedContent = CryptoJS.AES.encrypt(fileData, aesKeyHex).toString();
+      encryptedFiles.push({
+        name: file.name,
+        type: file.type,
+        category: files.photos.includes(file) ? 'photo' : 'document',
+        encryptedContent
+      });
+    }
+
+    // 4. Encrypt AES Key with Insurer's Public Key
+    const encryptedAesKey = await encryptAESKeyWithPublicKey(aesKeyHex, insurerPublicKey);
+
+    // 5. Upload to IPFS (Pinata)
+    // We bundle everything into a single JSON for simplicity in this demo, 
+    // but in production you might want individual pins or a directory.
+    const payload = {
+      files: encryptedFiles,
+      encryptedAesKey: encryptedAesKey, // Store key with the data
+      metadata: {
+        description,
+        claimType,
+        timestamp: Date.now()
+      }
+    };
+
+    const uploadResponse = await fetch('http://localhost:8080/api/upload/uploadToPinata', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        encryptedData: JSON.stringify(payload), // The API expects encryptedData field, but here we are sending our custom JSON structure. 
+        // WAIT: The backend /uploadToPinata might expect specific fields. 
+        // Let's check the backend code if possible, or just use a generic IPFS upload if available.
+        // Looking at submitRoleUpgradeRequest, it sends { encryptedData, metadata }.
+        // Let's wrap our payload in `encryptedData` to match the backend expectation, 
+        // effectively double-stringifying or just using the field name.
+        // Actually, let's just send the payload as the body if we had a generic endpoint.
+        // Since we are using the existing endpoint, let's adapt.
+        // The existing endpoint likely pins whatever is in `encryptedData`.
+        // Let's put our JSON string there.
+        metadata: {
+          type: 'claim',
+          recordId
+        }
+      })
+    });
+
+    // RE-READING submitRoleUpgradeRequest:
+    // It sends: { encryptedData: encrypted, metadata: ... }
+    // And gets back { cid }.
+    // So we should put our huge JSON string into `encryptedData`.
+    
+    const uploadResult = await uploadResponse.json();
+    if (!uploadResult.cid) throw new Error('Failed to upload claim data to IPFS');
+    const cid = uploadResult.cid;
+    console.log('Claim data uploaded to IPFS, CID:', cid);
+
+    // 6. Submit to Blockchain
+    const contract = await writeClaimRequestContract();
+    const tx = await contract.submitClaim(
+      insurerAddress,
+      recordId,
+      requestedAmount,
+      claimType,
+      description,
+      cid
+    );
+    
+    return tx;
+  } catch (error) {
+    console.error('Error submitting claim:', error);
+    throw error;
+  }
+}
+
+export async function getClaimsByInsurer(insurerAddress: string) {
+  try {
+    const contract = await readClaimRequestContract();
+    const claimIds = await contract.getClaimsByInsurer(insurerAddress);
+    // Convert BigNumbers to numbers
+    return claimIds.map((id: any) => id.toNumber());
+  } catch (error) {
+    console.error('Error fetching insurer claims:', error);
+    return [];
+  }
+}
+
+export async function getClaimsByPatient(patientAddress: string) {
+  try {
+    const contract = await readClaimRequestContract();
+    const claimIds = await contract.getClaimsByPatient(patientAddress);
+    return claimIds.map((id: any) => id.toNumber());
+  } catch (error) {
+    console.error('Error fetching patient claims:', error);
+    return [];
+  }
+}
+
+export async function getClaimDetails(claimIds: number[]) {
+  try {
+    if (claimIds.length === 0) return [];
+    const contract = await readClaimRequestContract();
+    const claims = await contract.getClaimDetails(claimIds);
+    return claims;
+  } catch (error) {
+    console.error('Error fetching claim details:', error);
+    return [];
+  }
+}
+
+export async function getInsurerStatistics(insurerAddress: string) {
+  try {
+    const contract = await readClaimRequestContract();
+    const stats = await contract.getInsurerStatistics(insurerAddress);
+    return stats;
+  } catch (error) {
+    console.error('Error fetching statistics:', error);
+    return null;
+  }
+}
+
+export async function approveClaim(claimId: number, approvedAmount: number, notes: string) {
+  try {
+    const contract = await writeClaimRequestContract();
+    const tx = await contract.approveClaim(claimId, approvedAmount, notes);
+    return await tx.wait();
+  } catch (error) {
+    console.error('Error approving claim:', error);
+    throw error;
+  }
+}
+
+export async function rejectClaim(claimId: number, reason: string) {
+  try {
+    const contract = await writeClaimRequestContract();
+    const tx = await contract.rejectClaim(claimId, reason);
+    return await tx.wait();
+  } catch (error) {
+    console.error('Error rejecting claim:', error);
+    throw error;
+  }
+}
+
+export async function getClaimFiles(cid: string, insurerAddress: string) {
+  try {
+    // 1. Fetch from IPFS
+    // Use backend proxy to fetch from IPFS (handles private gateway/signed URLs)
+    const response = await fetch(`http://localhost:8080/api/upload/fetchFromIPFS/${cid}`);
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`IPFS fetch failed: ${response.status} ${response.statusText} - ${text}`);
+    }
+    // The backend returns the raw content (which is the JSON string of encryptedData)
+    // But wait, uploadToPinata uploads a BLOB of `encryptedData`.
+    // So the content we get back is the string "{\"encryptedAesKey\":...}"
+    // We need to parse it as JSON.
+    const data = await response.json();
+    
+    // The data is what we put in `encryptedData` in submitClaim.
+    // Wait, the backend endpoint `uploadToPinata` might wrap it?
+    // Let's assume the backend just pins the JSON body we sent or the `encryptedData` field.
+    // If we look at `submitRoleUpgradeRequest`, it sends `encryptedData` and expects `cid`.
+    // Usually these backends pin the JSON.
+    // If the backend pins { encryptedData: "...", metadata: ... }, then we need to parse that.
+    // Let's assume standard behavior: we get back the JSON object we sent.
+    
+    // Our payload was inside `encryptedData` stringified.
+    let payload;
+    if (data.encryptedData) {
+       payload = JSON.parse(data.encryptedData);
+    } else {
+       // Maybe it was pinned directly? Fallback
+       payload = data;
+    }
+
+    if (!payload.encryptedAesKey || !payload.files) {
+        console.warn('Invalid claim data format', payload);
+        return { photos: [], documents: [] };
+    }
+
+    // 2. Decrypt AES Key
+    // decryptAESKey fetches the private key internally using the address
+    const aesKeyHex = await decryptAESKey(payload.encryptedAesKey, insurerAddress);
+    
+    // 3. Decrypt Files
+    const decryptedFiles = payload.files.map((file: any) => {
+      const decryptedBytes = CryptoJS.AES.decrypt(file.encryptedContent, aesKeyHex);
+      const decryptedString = decryptedBytes.toString(CryptoJS.enc.Utf8);
+      const fileObj = JSON.parse(decryptedString);
+      
+      return {
+        name: fileObj.name,
+        type: fileObj.type,
+        content: fileObj.content, // Base64
+        category: file.category
+      };
+    });
+
+    return {
+      photos: decryptedFiles.filter((f: any) => f.category === 'photo'),
+      documents: decryptedFiles.filter((f: any) => f.category === 'document')
+    };
+
+  } catch (error) {
+    console.error('Error fetching/decrypting claim files:', error);
     throw error;
   }
 }
@@ -1242,3 +1551,29 @@ export async function revokeAccess(
     throw error;
   }
 }
+
+// export async function submitClaim(
+//   insurerAddress: string,
+//   medicalRecordID: string,
+//   requestedAmount: number,
+//   claimType: string,
+//   description: string,
+//   cid: string
+// ){
+//   try{
+//     const contract = await writeClaimRequestContract();
+//     const tx = await contract.submitClaim(
+//       insurerAddress,
+//       medicalRecordID,
+//       requestedAmount,
+//       claimType, 
+//       description,
+//       cid
+//     )
+//     await tx.wait();
+//     return tx;
+//   }catch(error){
+//     console.error('Failed to submit claim', error);
+//     throw error;
+//   }
+// }

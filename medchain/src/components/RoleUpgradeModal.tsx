@@ -1,16 +1,14 @@
-//RoleUpgradeModal.tsx
 import { X } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import FileUploadField from './FileUploadField';
 import {
   getAdminPublicKey,
   getAdmins,
-  requestRoleUpgrade,
   submitRoleUpgradeRequest,
 } from '@/lib/integration';
 import { ethers } from 'ethers';
 import { print } from '../../utils/toast';
-import { ToastContainer, toast } from 'react-toastify';
+import { ToastContainer } from 'react-toastify';
 
 interface RoleUpgradeModalProps {
   isOpen: boolean;
@@ -39,11 +37,13 @@ const RoleUpgradeModal: React.FC<RoleUpgradeModalProps> = ({
   const [admins, setAdmins] = useState<string[]>([]);
   const [selectedAdmin, setSelectedAdmin] = useState<string[]>([]);
   const [address, setAddress] = useState<string>('');
+  const [doctorName, setDoctorName] = useState<string>('');
 
   useEffect(() => {
     if (!isOpen) {
       setAdditionalInfo('');
       setOrganization('');
+      setDoctorName('');
       setFiles({ license: null, id: null, proof: null });
       setSelectedAdmin([]);
     }
@@ -61,6 +61,7 @@ const RoleUpgradeModal: React.FC<RoleUpgradeModalProps> = ({
     }
   }, [isOpen]);
 
+  // Fetch admins on component mount (backup/alternative fetch)
   useEffect(() => {
     const fetchAdmins = async () => {
       try {
@@ -87,100 +88,159 @@ const RoleUpgradeModal: React.FC<RoleUpgradeModalProps> = ({
     if (isOpen) fetchAddress();
   }, [isOpen]);
 
-const handleSubmit = async () => {
-  try {
-    if (!selectedRole) {
-      print('Please ensure a role is selected', 'warning', ()=> {});
-      return;
-    } else if (selectedAdmin.length === 0) {
-      print('Please select an admin', 'warning', ()=> {});
-      return;
-    } else if (!files.id || !files.license || !files.proof) {
-      print('Please ensure all files are attached', 'warning', ()=> {});
-      return;
-    } else {
-      // Additional validation for files
-      console.log('Files validation in modal:');
-      console.log('files.id:', files.id);
-      console.log('files.license:', files.license);
-      console.log('files.proof:', files.proof);
-      
-      if (!files.id.name || !files.license.name || !files.proof.name) {
-        print('One or more files are invalid. Please re-select the files.', 'error', ()=> {});
+  const isFormValid = () => {
+    if (!selectedRole) return false;
+    if (selectedAdmin.length === 0) return false;
+    if (!files.id || !files.license || !files.proof) return false;
+    if (selectedRole === 'insurance' && !organization.trim()) return false;
+    if (selectedRole === 'healthcare' && !doctorName.trim()) return false;
+    return true;
+  };
+
+  const handleSubmit = async () => {
+    try {
+      // Basic validation
+      if (!selectedRole) {
+        print('Please ensure a role is selected', 'warning', () => {});
         return;
       }
-      
+
+      if (selectedAdmin.length === 0) {
+        print('Please select an admin', 'warning', () => {});
+        return;
+      }
+
+      if (!files.id || !files.license || !files.proof) {
+        print('Please ensure all files are attached', 'warning', () => {});
+        return;
+      }
+
+      // Validate file objects
+      if (!files.id.name || !files.license.name || !files.proof.name) {
+        print('One or more files are invalid. Please re-select the files.', 'error', () => {});
+        return;
+      }
+
+      // Role-specific validation
+      if (selectedRole === 'insurance' && !organization.trim()) {
+        print('Please enter your insurance company name', 'warning', () => {});
+        return;
+      }
+
+      if (selectedRole === 'healthcare' && !doctorName.trim()) {
+        print("Please enter the doctor's name", 'warning', () => {});
+        return;
+      }
+
       console.log('No error so far');
       console.log('Selected role:', selectedRole);
       console.log('Selected admins:', selectedAdmin);
-      
-      // Fetch admin public keys with better error handling
+      console.log('Doctor name:', doctorName);
+      console.log('Organization:', organization);
+
+      // Fetch admin public keys with error handling
       const adminPublicKeys = await Promise.all(
         selectedAdmin.map(async (addr, index) => {
           try {
             const publicKey = await getAdminPublicKey(addr);
             console.log(`Admin ${index} (${addr}):`, publicKey);
-            
+
             if (!publicKey || publicKey === '' || publicKey === '0x') {
-              throw new Error(`Admin ${addr} has no public key set. Please ask the admin to generate and register their keys first.`);
+              throw new Error(
+                `Admin ${addr} has no public key set. Please ask the admin to generate and register their keys first.`
+              );
             }
-            
+
             return publicKey;
           } catch (error) {
             console.error(`Error fetching public key for admin ${addr}:`, error);
-            throw new Error(`Failed to get public key for admin ${addr.slice(0, 6)}...${addr.slice(-4)}. Admin may need to register their keys first.`);
+            throw new Error(
+              `Failed to get public key for admin ${addr.slice(0, 6)}...${addr.slice(
+                -4
+              )}. Admin may need to register their keys first.`
+            );
           }
         })
       );
-      
+
       console.log('All admin public keys:', adminPublicKeys);
-      
-      // Verify all keys are valid before proceeding
-      const invalidKeys = adminPublicKeys.filter(key => !key || key === '' || key === '0x');
+
+      // Verify all keys are valid
+      const invalidKeys = adminPublicKeys.filter(
+        (key) => !key || key === '' || key === '0x'
+      );
       if (invalidKeys.length > 0) {
-        throw new Error('Some admins have not registered their public keys yet. Please select different admins or ask them to register their keys first.');
+        throw new Error(
+          'Some admins have not registered their public keys yet. Please select different admins or ask them to register their keys first.'
+        );
       }
+
+      // Prepare companyName and doctorName based on role
+      let companyName = '';
+      let finalDoctorName = '';
+
+      if (selectedRole === 'insurance') {
+        companyName = organization.trim();
+        finalDoctorName = '';
+      } else if (selectedRole === 'healthcare') {
+        companyName = '';
+        finalDoctorName = doctorName.trim();
+      } else {
+        // admin role
+        companyName = '';
+        finalDoctorName = '';
+      }
+
+      console.log('Final companyName to pass:', companyName);
+      console.log('Final doctorName to pass:', finalDoctorName);
+      console.log('Organization (for metadata):', organization);
 
       await submitRoleUpgradeRequest(
         address,
         { id: files.id, license: files.license, proof: files.proof },
         {
           role: selectedRole,
-          organization: organization,
+          organization: organization, // Keep for ALL roles (admin sees this)
           additionalInfo: additionalInfo,
+          doctorName: selectedRole === 'healthcare' ? doctorName.trim() : undefined,
         },
         selectedAdmin,
-        adminPublicKeys
+        adminPublicKeys,
+        companyName, // Only has value for insurance role
+        finalDoctorName // Only has value for healthcare role
       );
-      
+
       print('You successfully requested for a role upgrade!', 'success', () =>
         onClose()
       );
-    }
-  } catch (err: any) {
-    console.error('Error submitting request: ', err);
+    } catch (err: any) {
+      console.error('Error submitting request: ', err);
 
-    let errorMessage = 'Failed to submit request';
+      let errorMessage = 'Failed to submit request';
 
-    if (err.message) {
-      errorMessage = err.message;
-    } else if (err.reason) {
-      errorMessage = err.reason.replace('execution reverted: ', '');
+      if (err.message) {
+        errorMessage = err.message;
+      } else if (err.reason) {
+        errorMessage = err.reason.replace('execution reverted: ', '');
+      }
+
+      // Provide more specific error messages for common issues
+      if (
+        errorMessage.includes('File is null or undefined') ||
+        errorMessage.includes('One or more files are missing')
+      ) {
+        errorMessage = 'Please ensure all files are properly selected before submitting.';
+      } else if (errorMessage.includes('Failed to process file')) {
+        errorMessage =
+          'There was an issue processing one of your files. Please try selecting the files again.';
+      } else if (errorMessage.includes('Admin')) {
+        errorMessage = 'Admin key issue: ' + errorMessage;
+      }
+
+      print(errorMessage, 'error', () => {});
+      console.log('Error message:', errorMessage);
     }
-    
-    // Provide more specific error messages for common issues
-    if (errorMessage.includes('File is null or undefined') || errorMessage.includes('One or more files are missing')) {
-      errorMessage = 'Please ensure all files are properly selected before submitting.';
-    } else if (errorMessage.includes('Failed to process file')) {
-      errorMessage = 'There was an issue processing one of your files. Please try selecting the files again.';
-    } else if (errorMessage.includes('Admin')) {
-      errorMessage = 'Admin key issue: ' + errorMessage;
-    }
-    
-    print(errorMessage, 'error', () => {});
-    console.log('Error message:', errorMessage);
-  }
-};
+  };
 
   if (!isOpen) return null;
 
@@ -189,9 +249,7 @@ const handleSubmit = async () => {
       <ToastContainer />
       <div className="bg-gray-900 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-700">
         <div className="sticky top-0 bg-gray-900 border-b border-gray-700 p-6 flex justify-between items-center">
-          <h2 className="text-white text-xl font-semibold">
-            Request Role Upgrade
-          </h2>
+          <h2 className="text-white text-xl font-semibold">Request Role Upgrade</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white">
             <X size={24} />
           </button>
@@ -200,9 +258,7 @@ const handleSubmit = async () => {
         <div className="p-6 space-y-6">
           {/* Role Selection */}
           <div>
-            <label className="text-white mb-3 block">
-              I want to register as:
-            </label>
+            <label className="text-white mb-3 block">I want to register as:</label>
             <div className="space-y-2">
               <label className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750">
                 <input
@@ -213,9 +269,7 @@ const handleSubmit = async () => {
                   onChange={(e) => setSelectedRole(e.target.value)}
                   className="w-4 h-4"
                 />
-                <span className="text-white">
-                  Healthcare Provider (Doctor/Nurse)
-                </span>
+                <span className="text-white">Healthcare Provider (Doctor/Nurse)</span>
               </label>
               <label className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750">
                 <input
@@ -258,9 +312,7 @@ const handleSubmit = async () => {
               <FileUploadField
                 label="Government ID"
                 file={files.id}
-                onChange={(e) =>
-                  setFiles({ ...files, id: e.target.files?.[0] || null })
-                }
+                onChange={(e) => setFiles({ ...files, id: e.target.files?.[0] || null })}
               />
               <FileUploadField
                 label="Proof of Practice/Organization"
@@ -272,31 +324,56 @@ const handleSubmit = async () => {
             </div>
           </div>
 
-          {/* Hospital/Organization field */}
-          <div>
-            <label className="text-white mb-2 block">Organization Name:</label>
-            <textarea
-              value={organization}
-              onChange={(e) => setOrganization(e.target.value)}
-              placeholder="Hospital/Organization name"
-              className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600"
-              rows={1}
-            />
-          </div>
-
+          {/* Organization Name - REQUIRED for all roles */}
           <div>
             <label className="text-white mb-2 block">
-              Select Admin Reviewers:
+              Organization Name: <span className="text-red-400">*</span>
             </label>
+            <input
+              type="text"
+              value={organization}
+              onChange={(e) => setOrganization(e.target.value)}
+              placeholder={
+                selectedRole === 'insurance'
+                  ? 'e.g., Medicare Insurance, Blue Cross'
+                  : 'Hospital/Clinic/Organization name'
+              }
+              className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600"
+            />
+            <p className="text-gray-500 text-xs mt-1">
+              {selectedRole === 'insurance'
+                ? 'This will be your registered insurance company name'
+                : 'Organization information for the admin reviewer'}
+            </p>
+          </div>
+
+          {/* Doctor's Name - ONLY for healthcare */}
+          {selectedRole === 'healthcare' && (
+            <div>
+              <label className="text-white mb-2 block">
+                Doctor's Name: <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={doctorName}
+                onChange={(e) => setDoctorName(e.target.value)}
+                placeholder="e.g., Dr. John Smith"
+                className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              />
+              <p className="text-gray-500 text-xs mt-1">
+                This will be your registered name as a healthcare provider
+              </p>
+            </div>
+          )}
+
+          <div>
+            <label className="text-white mb-2 block">Select Admin Reviewers:</label>
             <div className="space-y-2">
               {admins.length === 0 ? (
                 <p className="text-gray-400">No admins available.</p>
               ) : (
                 admins.map((adminAddr) => (
-                  <label
-                    key={adminAddr}
-                    className="flex items-center gap-2 text-white"
-                  >
+                  <label key={adminAddr} className="flex items-center gap-2 text-white">
                     <input
                       type="checkbox"
                       value={adminAddr}
@@ -304,9 +381,7 @@ const handleSubmit = async () => {
                       onChange={(e) => {
                         const { checked, value } = e.target;
                         setSelectedAdmin((prev: any) =>
-                          checked
-                            ? [...prev, value]
-                            : prev.filter((a: any) => a !== value)
+                          checked ? [...prev, value] : prev.filter((a: any) => a !== value)
                         );
                       }}
                     />
@@ -319,9 +394,7 @@ const handleSubmit = async () => {
 
           {/* Additional Information */}
           <div>
-            <label className="text-white mb-2 block">
-              Additional Information:
-            </label>
+            <label className="text-white mb-2 block">Additional Information:</label>
             <textarea
               value={additionalInfo}
               onChange={(e) => setAdditionalInfo(e.target.value)}
@@ -336,23 +409,20 @@ const handleSubmit = async () => {
             <p className="text-blue-200 text-sm mb-1">
               <strong>Status:</strong> Your request will be reviewed by admins
             </p>
-            <p className="text-blue-300 text-sm">
-              Typical review time: 2-3 business days
-            </p>
+            <p className="text-blue-300 text-sm">Typical review time: 2-3 business days</p>
           </div>
 
           {/* Buttons */}
           <div className="flex gap-4 justify-end pt-4">
             <button
               onClick={onClose}
-              className="px-6 py-2 bg-gray-700 hover:bg-gray-600 text
-              -white rounded-lg"
+              className="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg"
             >
               Cancel
             </button>
             <button
               onClick={handleSubmit}
-              disabled={!selectedRole}
+              disabled={!isFormValid()}
               className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Submit for Review

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, Clock, CheckCircle, XCircle, FileText, ChevronDown, Eye } from 'lucide-react';
 import { BigNumber, ethers } from 'ethers';
 import { getRole, getPendingRequestsByAdmin, getAcknowledgedRequestsByAdmin, approveUpgrade, rejectRequest, getAllUsers } from '@/lib/integration';
+import { fetchAndDecryptDocuments } from '@/lib/decryption';
 import { UserRole } from '../../../utils/userRole';
 import DocumentViewerModal from '@/components/DocumentViewerModal';
 import useStore from '@/store/userStore';
@@ -185,7 +186,42 @@ const Dashboard = () => {
   const handleApprove = async (requestId: number, userAddress: string) => {
     try {
       console.log('Approving request:', requestId, userAddress);
-      await approveUpgrade(requestId, userAddress);
+      // Fetch documents to get the role name (Company Name or Doctor Name)
+      let roleName = '';
+      
+      const request = pendingRequests.find(r => r.requestId.toNumber() === requestId);
+      if (!request) {
+        throw new Error('Request not found in local state');
+      }
+
+      if (request.newRole === UserRole.Insurer || request.newRole === UserRole.HealthcareProvider) {
+        setLoading(true);
+        try {
+          const documents = await fetchAndDecryptDocuments(requestId);
+          if (!documents || documents.length === 0) {
+            throw new Error('No documents found. Cannot retrieve required name for approval.');
+          }
+          
+          const metadata = documents[0].metadata;
+          
+          if (request.newRole === UserRole.Insurer) {
+            roleName = metadata.organization;
+          } else if (request.newRole === UserRole.HealthcareProvider) {
+            roleName = metadata.doctorName || '';
+          }
+          
+          if (!roleName) {
+             throw new Error('Required name (Organization or Doctor Name) is missing in document metadata.');
+          }
+        } catch (err: any) {
+          console.error('Error fetching documents for approval:', err);
+          throw new Error('Failed to retrieve required name from documents. Please ensure you can view the documents first. Error: ' + err.message);
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      await approveUpgrade(requestId, userAddress, roleName);
       
       // Show success message
       alert('Request approved successfully!');
