@@ -286,10 +286,10 @@ useEffect(() => {
 
   useEffect(() => {
     const fetchClaims = async () => {
-      if (!walletAddress) return;
+      if (!userAddress) return;
       setLoadingClaims(true);
       try {
-        const claimIds = await getClaimsByPatient(walletAddress);
+        const claimIds = await getClaimsByPatient(userAddress);
         const details = await getClaimDetails(claimIds);
         
         const formatted = details.map((c: any) => ({
@@ -310,7 +310,7 @@ useEffect(() => {
     };
     
     fetchClaims();
-  }, [walletAddress]);
+  }, [userAddress]);
 
   const handleShareToUser = async (record: medicalDocuments) => {
     setSelectedDocument(record);
