@@ -1,36 +1,48 @@
 "use client";
 import useStore from "@/store/userStore";
-import { Bell, User2 } from 'lucide-react';
+import { Bell, User2, AlertCircle, FileText, Share2 } from 'lucide-react';
 import { useEffect, useRef, useState } from "react";
-import { getPendingRequestByUser, getRole } from '@/lib/integration';
+import { getNotificationsByUser, getRole } from '@/lib/integration';
 import { ethers } from "ethers";
 import { UserRole } from "../../utils/userRole";
-
-  interface RoleUpgradeRequest {
-    requestId: number;
-    newRole: UserRole;
-    isProcessed: boolean;
-    isApproved: boolean;
-    adminAddresses: string[];
-    requester: string;
-    timestamp: number;
-    cid: string;
-  }
+import { Notification, NotificationType } from "@/types/notification";
 
 const TopBar = ({userName}:{userName:string})=>{
   const role = useStore((state) => state.role);
   const [hydrated, setHydrated] = useState(false);  
   const [showDropdown, setShowDropdown] = useState(false);
-  const [notification, setNotication] = useState<RoleUpgradeRequest[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setHydrated(true);
   }, []);
 
+  // Mark notifications as read when dropdown is opened
   const handleOpen =()=> {
     setShowDropdown(true);
+    
+    // Mark all current notifications as read
+    if (notifications.length > 0) {
+      const readNotifications = JSON.parse(localStorage.getItem('readNotifications') || '[]');
+      const allNotificationIds = notifications.map(n => n.id.toString());
+      const updatedReadNotifications = [...new Set([...readNotifications, ...allNotificationIds])];
+      localStorage.setItem('readNotifications', JSON.stringify(updatedReadNotifications));
+      setUnreadCount(0);
+    }
   }
+  
+  // Calculate unread count based on localStorage
+  useEffect(() => {
+    if (notifications.length > 0) {
+      const readNotifications = JSON.parse(localStorage.getItem('readNotifications') || '[]');
+      const unread = notifications.filter(n => !readNotifications.includes(n.id.toString()));
+      setUnreadCount(unread.length);
+    } else {
+      setUnreadCount(0);
+    }
+  }, [notifications]);
 
   useEffect(() => {
     const handleClickOutside=(event: MouseEvent)=> {
@@ -47,66 +59,116 @@ const TopBar = ({userName}:{userName:string})=>{
   },[]);
 
   useEffect(()=> {
-    const fetchNotification = async() =>{
+    const fetchNotifications = async() => {
       if(!window.ethereum){
-      return;
-    }
-      const provider = new ethers.providers.Web3Provider(
-        window.ethereum as ethers.providers.ExternalProvider
-      );
-      await provider.send('eth_requestAccounts', []);
-      const signer = provider.getSigner();
-      const userAddress = await signer.getAddress();
-      const userRole = await getRole(userAddress);
+        return;
+      }
+      try {
+        const provider = new ethers.providers.Web3Provider(
+          window.ethereum as ethers.providers.ExternalProvider
+        );
+        await provider.send('eth_requestAccounts', []);
+        const signer = provider.getSigner();
+        const userAddress = await signer.getAddress();
+        const userRole = await getRole(userAddress);
 
-      if(userRole == UserRole.Patient){
-        const pending = await getPendingRequestByUser(userAddress);
-        const formatted = pending.map((req: any) => ({
-          ...req,
-          requestId: Number(req.requestId),
-          newRole: UserRole[req.newRole],
-          timestamp: Number(req.timestamp),
-        }));
-        setNotication(formatted);
+        // Fetch notifications for all roles
+        const fetchedNotifications = await getNotificationsByUser(userAddress, userRole);
+        setNotifications(fetchedNotifications);
+      } catch (error) {
+        console.error("Error fetching notifications:", error);
       }
     }
 
-    fetchNotification();
+    fetchNotifications();
+    
+    // Optional: Refresh notifications every 30 seconds
+    const interval = setInterval(fetchNotifications, 30000);
+    
+    return () => clearInterval(interval);
   },[]);
 
+  // Helper function to format timestamp
+  const formatTimestamp = (timestamp: number): string => {
+    const now = Date.now();
+    const diff = now - timestamp;
+    
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    
+    if (minutes < 1) return "Just now";
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    
+    // For older notifications, show the date
+    const date = new Date(timestamp);
+    return date.toLocaleDateString();
+  };
+
+  // Helper function to get notification icon
+  const getNotificationIcon = (type: NotificationType) => {
+    switch(type) {
+      case NotificationType.PendingAdminRequest:
+      case NotificationType.PendingInsurerRequest:
+        return <AlertCircle className="text-yellow-400" size={18} />;
+      case NotificationType.MedicalRecordCreated:
+        return <FileText className="text-green-400" size={18} />;
+      case NotificationType.MedicalRecordShared:
+        return <Share2 className="text-blue-400" size={18} />;
+      default:
+        return <Bell className="text-gray-400" size={18} />;
+    }
+  };
 
   return(
     <div className="bg-blue-950 w-full flex justify-between items-center px-6 py-4 shadow-sm">
       <div className="flex items-center space-x-6">
-        <button className="hover:bg-gray-400 p-2 rounded-full" onClick={handleOpen}>
-          <Bell className="text-white" />
-        </button>
+        <div className="relative">
+          <button className="hover:bg-gray-400 p-2 rounded-full" onClick={handleOpen}>
+            <Bell className="text-white" />
+            {/* Notification count badge - only show unread */}
+            {unreadCount > 0 && (
+              <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-semibold">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+        </div>
         {/* Dropdown */}
         {hydrated && showDropdown && (
-          <div className="absolute top-12 left-0 translate-x-28 bg-gray-900 border border-gray-700 rounded-lg w-80 shadow-lg z-50" ref={dropdownRef}>
+          <div className="absolute top-12 left-0 translate-x-28 bg-gray-900 border border-gray-700 rounded-lg w-96 shadow-lg z-50" ref={dropdownRef}>
             <div className="p-3 border-b border-gray-700 text-white font-semibold">
               Notifications
+              {notifications.length > 0 && (
+                <span className="ml-2 text-sm text-gray-400">({notifications.length})</span>
+              )}
             </div>
             <div className="max-h-64 overflow-y-auto">
-              {notification.length === 0 ? (
+              {notifications.length === 0 ? (
                 <div className="p-4 text-gray-400 text-sm">
-                  No pending requests.
+                  No notifications.
                 </div>
               ) : (
-                notification.map((req, i) => (
+                notifications.map((notif) => (
                   <div
-                    key={i}
-                    className="p-4 border-b border-gray-800 text-white text-sm"
+                    key={notif.id}
+                    className="p-4 border-b border-gray-800 hover:bg-gray-800 cursor-pointer transition-colors"
                   >
-                    <p>
-                      <strong>Request ID: </strong> {req.requestId}
-                    </p>
-                    <p>
-                      <strong>Requested Role: </strong>{req.newRole}
-                    </p>
-                    <p className="text-yellow-400 font-medium">
-                      Status: Pending
-                    </p>
+                    <div className="flex items-start space-x-3">
+                      <div className="mt-1">
+                        {getNotificationIcon(notif.type)}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-white text-sm">
+                          {notif.message}
+                        </p>
+                        <p className="text-gray-400 text-xs mt-1">
+                          {formatTimestamp(notif.createdAt)}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 ))
               )}

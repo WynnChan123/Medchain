@@ -8,6 +8,8 @@ import { decryptAESKey } from './decryption';
 import { getPrivateKey } from './keyStorage';
 import { getUserPublicKey } from './userKeys';
 import { encryptAESKeyWithPublicKey } from './webCryptoUtils';
+import { Notification, NotificationType } from "@/types/notification";
+
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_SMART_CONTRACT_ADDRESS!;
 const UPGRADE_ADDRESS = process.env.NEXT_PUBLIC_ROLE_UPGRADE_ADDRESS!;
@@ -1552,28 +1554,194 @@ export async function revokeAccess(
   }
 }
 
-// export async function submitClaim(
-//   insurerAddress: string,
-//   medicalRecordID: string,
-//   requestedAmount: number,
-//   claimType: string,
-//   description: string,
-//   cid: string
-// ){
-//   try{
-//     const contract = await writeClaimRequestContract();
-//     const tx = await contract.submitClaim(
-//       insurerAddress,
-//       medicalRecordID,
-//       requestedAmount,
-//       claimType, 
-//       description,
-//       cid
-//     )
-//     await tx.wait();
-//     return tx;
-//   }catch(error){
-//     console.error('Failed to submit claim', error);
-//     throw error;
-//   }
-// }
+/**
+ * Fetch notifications for a user based on their role
+ * @param userAddress - The wallet address of the user
+ * @param role - The role of the user (Admin, Patient, HealthcareProvider, Insurer)
+ * @returns Array of notifications
+ */
+export async function getNotificationsByUser(
+  userAddress: string,
+  role: UserRole
+): Promise<Notification[]> {
+  const notifications: Notification[] = [];
+
+  try {
+    if (role === UserRole.Admin) {
+      // Admin: Get pending role upgrade requests
+      const pendingRequests = await getPendingRequestsByAdmin(userAddress);
+      
+      for (let i = 0; i < pendingRequests.length; i++) {
+        const req = pendingRequests[i];
+        const roleNames: Record<number, string> = {
+          [UserRole.HealthcareProvider]: "Healthcare Provider",
+          [UserRole.Insurer]: "Insurer",
+          [UserRole.Admin]: "Admin"
+        };
+        
+        notifications.push({
+          id: `admin-${req.requestId.toString()}`,
+          type: NotificationType.PendingAdminRequest,
+          message: `User ${req.requester.slice(0, 6)}...${req.requester.slice(-4)} requested ${roleNames[req.newRole] || "Unknown"} role upgrade`,
+          createdAt: Number(req.timestamp) * 1000, // Convert to milliseconds
+          metadata: {
+            requestId: req.requestId.toString(),
+            requester: req.requester,
+            newRole: req.newRole
+          }
+        });
+      }
+    } else if (role === UserRole.Patient) {
+      // Patient: Get medical records created for them and shared with them
+      try {
+        const recordIds = await getPatientRecordIDs(userAddress);
+        
+        // Get details for each record to show creation notifications
+        for (const recordId of recordIds) {
+          try {
+            const record = await getMedicalRecord(userAddress, recordId);
+            console.log('Medical record data:', record);
+            console.log('Record createdAt:', record.createdAt);
+            
+            // Handle timestamp - use createdAt field from medical record
+            let timestamp = Date.now();
+            if (record.createdAt) {
+              const timestampNum = Number(record.createdAt);
+              if (!isNaN(timestampNum) && timestampNum > 0) {
+                // If timestamp is in seconds (typical blockchain timestamp), convert to milliseconds
+                timestamp = timestampNum > 10000000000 ? timestampNum : timestampNum * 1000;
+              }
+            }
+            
+            notifications.push({
+              id: `patient-record-${recordId}`,
+              type: NotificationType.MedicalRecordCreated,
+              message: `A new ${record.recordType || "medical"} record was created for you`,
+              createdAt: timestamp,
+              metadata: {
+                recordId: recordId,
+                recordType: record.recordType
+              }
+            });
+          } catch (error) {
+            console.error(`Error fetching record ${recordId}:`, error);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching patient records:", error);
+      }
+
+      // Get shared records
+      try {
+        const sharedRecords = await getSharedRecords(userAddress);
+        console.log('Shared records:', sharedRecords);
+        
+        for (const shared of sharedRecords) {
+          console.log('Shared record timestamp:', shared.timestamp);
+          
+          // Handle timestamp - use current time if timestamp is invalid
+          let timestamp = Date.now();
+          if (shared.timestamp) {
+            const timestampNum = Number(shared.timestamp);
+            if (!isNaN(timestampNum) && timestampNum > 0) {
+              // If timestamp is in seconds (typical blockchain timestamp), convert to milliseconds
+              timestamp = timestampNum > 10000000000 ? timestampNum : timestampNum * 1000;
+            }
+          }
+          
+          notifications.push({
+            id: `patient-shared-${shared.recordId}`,
+            type: NotificationType.MedicalRecordShared,
+            message: `A medical record was shared with you by ${shared.patientAddress.slice(0, 6)}...${shared.patientAddress.slice(-4)}`,
+            createdAt: timestamp,
+            metadata: {
+              recordId: shared.recordId,
+              patientAddress: shared.patientAddress
+            }
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching shared records:", error);
+      }
+
+    } else if (role === UserRole.HealthcareProvider) {
+      // Doctor: Get medical records shared with them
+      try {
+        const sharedRecords = await getSharedRecords(userAddress);
+        
+        for (const shared of sharedRecords) {
+          // Handle timestamp - use current time if timestamp is invalid
+          let timestamp = Date.now();
+          if (shared.timestamp) {
+            const timestampNum = Number(shared.timestamp);
+            if (!isNaN(timestampNum) && timestampNum > 0) {
+              timestamp = timestampNum > 10000000000 ? timestampNum : timestampNum * 1000;
+            }
+          }
+          
+          notifications.push({
+            id: `doctor-shared-${shared.recordId}`,
+            type: NotificationType.MedicalRecordShared,
+            message: `Patient ${shared.patientAddress.slice(0, 6)}...${shared.patientAddress.slice(-4)} shared a medical record with you`,
+            createdAt: timestamp,
+            metadata: {
+              recordId: shared.recordId,
+              patientAddress: shared.patientAddress
+            }
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching shared records for doctor:", error);
+      }
+    } else if (role === UserRole.Insurer) {
+      // Insurer: Get pending claim requests
+      try {
+        const claimIds = await getClaimsByInsurer(userAddress);
+        
+        for (const claimId of claimIds) {
+          try {
+            const claims = await getClaimDetails([claimId]);
+            if (claims && claims.length > 0) {
+              const claim = claims[0];
+              // Only show pending claims (status 0)
+              if (claim.status === 0) {
+                // Handle timestamp - use current time if timestamp is invalid
+                let timestamp = Date.now();
+                if (claim.submittedAt) {
+                  const timestampNum = Number(claim.submittedAt);
+                  if (!isNaN(timestampNum) && timestampNum > 0) {
+                    timestamp = timestampNum > 10000000000 ? timestampNum : timestampNum * 1000;
+                  }
+                }
+                
+                notifications.push({
+                  id: `insurer-claim-${claimId}`,
+                  type: NotificationType.PendingInsurerRequest,
+                  message: `Claim #${claimId} from ${claim.patient.slice(0, 6)}...${claim.patient.slice(-4)} requires your review`,
+                  createdAt: timestamp,
+                  metadata: {
+                    claimId: claimId,
+                    patient: claim.patient,
+                    amount: claim.requestedAmount
+                  }
+                });
+              }
+            }
+          } catch (error) {
+            console.error(`Error fetching claim ${claimId}:`, error);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching insurer claims:", error);
+      }
+    }
+
+    // Sort notifications by timestamp (newest first)
+    notifications.sort((a, b) => b.createdAt - a.createdAt);
+
+    return notifications;
+  } catch (error) {
+    console.error("Error fetching notifications:", error);
+    return [];
+  }
+}
