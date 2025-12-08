@@ -807,6 +807,21 @@ export async function getAdminPublicKey(adminAddress: string) {
   }
 }
 
+export async function getProviders() {
+  try {
+    const contract = await readUpgradeContract();
+    const result = await contract.getAllProviders();
+    const providers = result[0].map((address: string, index: number) => ({
+      address, 
+      name: result[1][index]
+    }));
+    return providers;
+  } catch (error) {
+    console.error('Error fetching providers:', error);
+    return [];
+  }
+}
+
 // ==========================================
 // CLAIMS INTEGRATION
 // ==========================================
@@ -1550,6 +1565,17 @@ export async function revokeAccess(
     return tx;
   } catch (error) {
     console.error('Failed to grant access to other users', error);
+    throw error;
+  }
+}
+
+export async function getAllPatientAddresses(): Promise<string[]> {
+  try {
+    const contract = await readUserManagementContract();
+    const patientAddresses = await contract.getAllPatientAddresses();
+    return patientAddresses;
+  }catch(error){
+    console.error('Failed to get all patient addresses', error);
     throw error;
   }
 }
