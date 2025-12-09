@@ -79,25 +79,33 @@ export default function Login() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: username, password, publicKey }),
       });
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Login failed:', errorText);
-        throw new Error(errorText);
-      }
+      
+      // Parse the response body first
       let data;
       try {
         data = await response.json();
       } catch {
         const text = await response.text();
         console.error('Non-JSON response:', text);
-        throw new Error(text);
+        setErrorMessage(text || 'Login failed');
+        return;
       }
+
+      // Check if response is not ok and display the error message
+      if (!response.ok) {
+        const errorMsg = data.message || data.error || 'Login failed';
+        console.error('Login failed:', errorMsg);
+        setErrorMessage(errorMsg);
+        return;
+      }
+
       if (!window.ethereum) {
         setErrorMessage(
           'Ethereum provider not found. Please install MetaMask.'
         );
         return;
       }
+      
       const provider = new ethers.providers.Web3Provider(
         window.ethereum as ethers.providers.ExternalProvider
       );
@@ -105,14 +113,9 @@ export default function Login() {
       const signer = provider.getSigner();
       const signerAddress = await signer.getAddress();
       const network = await provider.getNetwork();
+      
       if (network.chainId !== 11155111) {
         setErrorMessage('Please connect to the Sepolia network in MetaMask.');
-        return;
-      }
-      // console.log('Connected to network:', network.chainId);
-
-      if (!response.ok) {
-        setErrorMessage(data.error || 'Login failed');
         return;
       }
 
@@ -136,9 +139,6 @@ export default function Login() {
 
         try {
           const roleId = await getRole(signerAddress);
-          // alert('Role ID from blockchain:' + roleId);
-          // alert('Type of roleId:' + typeof roleId);
-          // alert('Is null?' + roleId === null);
 
           if (roleId === UserRole.Unregistered) {
             setErrorMessage(
@@ -148,7 +148,6 @@ export default function Login() {
             const encryptedId = ethers.utils.keccak256(
               ethers.utils.toUtf8Bytes(user.id)
             );
-            // alert('Encrypted ID:' + encryptedId);
             console.log('Signer address:', signerAddress);
             console.log('Public key (from backend or UI):', publicKey);
             const alreadyExists = await userExists(signerAddress);
@@ -159,10 +158,9 @@ export default function Login() {
                 'User already registered on blockchain. Please use a different wallet address.'
               );
             }
-            console.log('hello');
+            
             const txReceipt = await registerUser(signerAddress, encryptedId, 1);
             console.log('Transaction mined:', txReceipt);
-            console.log('hello');
 
             await new Promise((resolve) => setTimeout(resolve, 2000));
             toast.success('Registration on blockchain is successful');
@@ -174,7 +172,6 @@ export default function Login() {
             }
 
             const roleName = UserRole[finalRole] as keyof typeof UserRole;
-            // alert('Role from enum:' + roleName);
             setRole(roleName);
 
             if (finalRole === UserRole.Admin) {
@@ -208,21 +205,18 @@ export default function Login() {
           }
         } catch (error: any) {
           console.error('Error fetching role from blockchain:', error);
-          if (error.reason) {
-            throw new Error(error.reason);
-          } else if (error.message) {
-            throw new Error(error.message);
-          } else {
-            throw new Error('An unknown blockchain error occurred.');
-          }
+          const errorMsg = error.reason || error.message || 'An unknown blockchain error occurred.';
+          setErrorMessage(errorMsg);
+          return;
         }
       } else {
-        setErrorMessage('Login failed: ' + (data.error || 'Unknown error'));
+        setErrorMessage('Login failed: ' + (data.message || data.error || 'Unknown error'));
         console.log('Login failed: ', data);
       }
-    } catch (error) {
-      setErrorMessage('Error during login');
-      console.error(error);
+    } catch (error: any) {
+      console.error('Error during login:', error);
+      const errorMsg = error.message || error.reason || 'Error during login';
+      setErrorMessage(errorMsg);
     }
   };
 

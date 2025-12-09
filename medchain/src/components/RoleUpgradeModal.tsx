@@ -245,53 +245,53 @@ const RoleUpgradeModal: React.FC<RoleUpgradeModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 h-full">
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-2 sm:p-4 h-full overflow-y-auto">
       <ToastContainer />
-      <div className="bg-gray-900 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-700">
-        <div className="sticky top-0 bg-gray-900 border-b border-gray-700 p-6 flex justify-between items-center">
-          <h2 className="text-white text-xl font-semibold">Request Role Upgrade</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
-            <X size={24} />
+      <div className="bg-gray-900 rounded-lg max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto border border-gray-700 my-auto">
+        <div className="sticky top-0 bg-gray-900 border-b border-gray-700 p-4 sm:p-6 flex justify-between items-center z-10">
+          <h2 className="text-white text-lg sm:text-xl font-semibold">Request Role Upgrade</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-white p-2 -mr-2">
+            <X size={20} className="sm:w-6 sm:h-6" />
           </button>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
           {/* Role Selection */}
           <div>
-            <label className="text-white mb-3 block">I want to register as:</label>
+            <label className="text-white mb-2 sm:mb-3 block text-sm sm:text-base">I want to register as:</label>
             <div className="space-y-2">
-              <label className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750">
+              <label className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750 transition">
                 <input
                   type="radio"
                   name="role"
                   value="healthcare"
                   checked={selectedRole === 'healthcare'}
                   onChange={(e) => setSelectedRole(e.target.value)}
-                  className="w-4 h-4"
+                  className="w-4 h-4 flex-shrink-0"
                 />
-                <span className="text-white">Healthcare Provider (Doctor/Nurse)</span>
+                <span className="text-white text-sm sm:text-base">Healthcare Provider (Doctor/Nurse)</span>
               </label>
-              <label className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750">
+              <label className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750 transition">
                 <input
                   type="radio"
                   name="role"
                   value="insurance"
                   checked={selectedRole === 'insurance'}
                   onChange={(e) => setSelectedRole(e.target.value)}
-                  className="w-4 h-4"
+                  className="w-4 h-4 flex-shrink-0"
                 />
-                <span className="text-white">Insurance Provider</span>
+                <span className="text-white text-sm sm:text-base">Insurance Provider</span>
               </label>
-              <label className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750">
+              <label className="flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750 transition">
                 <input
                   type="radio"
                   name="role"
                   value="admin"
                   checked={selectedRole === 'admin'}
                   onChange={(e) => setSelectedRole(e.target.value)}
-                  className="w-4 h-4"
+                  className="w-4 h-4 flex-shrink-0"
                 />
-                <span className="text-white">Admin</span>
+                <span className="text-white text-sm sm:text-base">Admin</span>
               </label>
             </div>
           </div>
@@ -326,7 +326,7 @@ const RoleUpgradeModal: React.FC<RoleUpgradeModalProps> = ({
 
           {/* Organization Name - REQUIRED for all roles */}
           <div>
-            <label className="text-white mb-2 block">
+            <label className="text-white mb-2 block text-sm sm:text-base">
               Organization Name: <span className="text-red-400">*</span>
             </label>
             <input
@@ -338,7 +338,7 @@ const RoleUpgradeModal: React.FC<RoleUpgradeModalProps> = ({
                   ? 'e.g., Medicare Insurance, Blue Cross'
                   : 'Hospital/Clinic/Organization name'
               }
-              className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              className="w-full p-2.5 sm:p-3 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm sm:text-base placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600"
             />
             <p className="text-gray-500 text-xs mt-1">
               {selectedRole === 'insurance'
@@ -413,17 +413,17 @@ const RoleUpgradeModal: React.FC<RoleUpgradeModalProps> = ({
           </div>
 
           {/* Buttons */}
-          <div className="flex gap-4 justify-end pt-4">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-end pt-4">
             <button
               onClick={onClose}
-              className="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg"
+              className="w-full sm:w-auto px-6 py-2.5 sm:py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition text-sm sm:text-base"
             >
               Cancel
             </button>
             <button
               onClick={handleSubmit}
               disabled={!isFormValid()}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full sm:w-auto px-6 py-2.5 sm:py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition text-sm sm:text-base"
             >
               Submit for Review
             </button>

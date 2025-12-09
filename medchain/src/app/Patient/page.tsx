@@ -358,31 +358,31 @@ useEffect(() => {
         </div>
       )}
 
-      {/* Welcome Card */}
-      <div className="bg-gradient-to-r from-blue-900 to-blue-800 rounded-lg p-6 shadow-lg border border-blue-700">
-        <h2 className="text-white text-xl font-semibold mb-2">
+      {/* Welcome Card - Responsive */}
+      <div className="bg-gradient-to-r from-blue-900 to-blue-800 rounded-lg p-4 sm:p-6 shadow-lg border border-blue-700">
+        <h2 className="text-white text-lg sm:text-xl font-semibold mb-2">
           Welcome back, {walletAddress || '0x1234...5678'}
         </h2>
-        <p className="text-blue-200 mb-4">
+        <p className="text-blue-200 text-sm sm:text-base mb-4">
           Current Role: {secondRole == '' ? role : secondRole}
         </p>
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-          <p className="text-blue-100 text-sm">
+          <p className="text-blue-100 text-xs sm:text-sm">
             Want to become a Healthcare Provider or Insurer?
           </p>
           <button
             onClick={() => setIsModalOpen(true)}
-            className="px-4 py-2 bg-white text-blue-900 rounded-lg font-medium hover:bg-blue-50 transition flex items-center gap-2 text-sm"
+            className="w-full sm:w-auto px-4 py-2 bg-white text-blue-900 rounded-lg font-medium hover:bg-blue-50 transition flex items-center justify-center gap-2 text-sm"
           >
             Request Role Upgrade →
           </button>
         </div>
       </div>
 
-      {/* Quick Actions */}
+      {/* Quick Actions - Responsive Grid */}
       <div>
-        <h3 className="text-white text-lg font-semibold mb-4">Quick Actions</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <h3 className="text-white text-base sm:text-lg font-semibold mb-3 sm:mb-4">Quick Actions</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {/* <ActionCard
             icon={<Upload size={24} />}
             title="Add Medical Record"
@@ -405,10 +405,10 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* Medical Records */}
-      <div className="bg-gray-900 rounded-lg p-6 border border-gray-700">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-white text-lg font-semibold">
+      {/* Medical Records - Responsive Table */}
+      <div className="bg-gray-900 rounded-lg p-4 sm:p-6 border border-gray-700">
+        <div className="flex justify-between items-center mb-3 sm:mb-4">
+          <h3 className="text-white text-base sm:text-lg font-semibold">
             My Medical Records
           </h3>
         </div>
@@ -418,43 +418,46 @@ useEffect(() => {
             Loading records...
           </div>
         ) : medicalRecords.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-700">
-                  <th className="text-left text-gray-400 py-3 px-4 text-sm">
-                    Record ID
-                  </th>
-                  <th className="text-left text-gray-400 py-3 px-4 text-sm">
-                    Type
-                  </th>
-                  <th className="text-left text-gray-400 py-3 px-4 text-sm">
-                    Date
-                  </th>
-                  <th className="text-left text-gray-400 py-3 px-4 text-sm">
-                    Actions
-                  </th>
-                  <th className="text-left text-gray-400 py-3 px-4 text-sm">
-                    Share
-                  </th>
-                  <th className="text-left text-gray-400 py-3 px-4 text-sm">
-                    Claims
-                  </th>
-                </tr>
-              </thead>
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <div className="inline-block min-w-full align-middle">
+              <table className="min-w-full">
+                <thead>
+                  <tr className="border-b border-gray-700">
+                    <th className="text-left text-gray-400 py-2 sm:py-3 px-2 sm:px-4 text-xs sm:text-sm">
+                      Record ID
+                    </th>
+                    <th className="text-left text-gray-400 py-2 sm:py-3 px-2 sm:px-4 text-xs sm:text-sm">
+                      Type
+                    </th>
+                    <th className="text-left text-gray-400 py-2 sm:py-3 px-2 sm:px-4 text-xs sm:text-sm hidden md:table-cell">
+                      Date
+                    </th>
+                    <th className="text-left text-gray-400 py-2 sm:py-3 px-2 sm:px-4 text-xs sm:text-sm">
+                      Actions
+                    </th>
+                    <th className="text-left text-gray-400 py-2 sm:py-3 px-2 sm:px-4 text-xs sm:text-sm hidden sm:table-cell">
+                      Share
+                    </th>
+                    <th className="text-left text-gray-400 py-2 sm:py-3 px-2 sm:px-4 text-xs sm:text-sm hidden lg:table-cell">
+                      Claims
+                    </th>
+                  </tr>
+                </thead>
               <tbody>
                 {medicalRecords.map((record) => (
                   <tr
                     key={record.recordId}
                     className="border-b border-gray-800 hover:bg-gray-800"
                   >
-                    <td className="text-white py-3 px-4 text-sm">
-                      {record.metadata.requestId}
+                    <td className="text-white py-2 sm:py-3 px-2 sm:px-4 text-xs sm:text-sm">
+                      <span className="block truncate max-w-[80px] sm:max-w-none">{record.metadata.requestId}</span>
                     </td>
-                    <td className="text-gray-300 py-3 px-4 text-sm">
-                      {record.metadata.recordType}
+                    <td className="text-gray-300 py-2 sm:py-3 px-2 sm:px-4 text-xs sm:text-sm">
+                      <span className="inline-block px-2 py-1 bg-blue-900 text-blue-200 rounded text-xs">
+                        {record.metadata.recordType}
+                      </span>
                     </td>
-                    <td className="text-gray-300 py-3 px-4 text-sm">
+                    <td className="text-gray-300 py-2 sm:py-3 px-2 sm:px-4 text-xs sm:text-sm hidden md:table-cell">
                       {/* Fixed: Access timestamp from metadata and handle different formats */}
                       {record.metadata?.timestamp
                         ? typeof record.metadata.timestamp === 'object' &&
@@ -465,34 +468,35 @@ useEffect(() => {
                           : new Date(record.metadata.timestamp).toLocaleString()
                         : 'N/A'}
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-2 sm:py-3 px-2 sm:px-4">
                       <button
                         onClick={() => handleViewRecord(record)}
-                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm"
+                        className="px-2 sm:px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs sm:text-sm whitespace-nowrap"
                       >
                         View
                       </button>
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-2 sm:py-3 px-2 sm:px-4 hidden sm:table-cell">
                       <button
                         onClick={() => handleShareToUser(record)}
-                        className="flex items-center gap-1 text-purple-400 hover:text-purple-300 text-sm transition"
+                        className="flex items-center gap-1 text-purple-400 hover:text-purple-300 text-xs sm:text-sm transition"
                       >
-                        <Share2 />
+                        <Share2 size={16} />
                       </button>
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-2 sm:py-3 px-2 sm:px-4 hidden lg:table-cell">
                       <button
                         onClick={() => handleSubmitClaim(record)}
-                        className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm flex items-center gap-1"
+                        className="px-2 sm:px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs sm:text-sm flex items-center gap-1 whitespace-nowrap"
                       >
-                      <FileText size={14} /> Submit Claim
-                    </button>
-                  </td>
+                        <FileText size={14} /> Claim
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         ) : (
           <div className="text-center py-8 text-gray-400">

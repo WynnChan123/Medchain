@@ -1,13 +1,19 @@
 "use client";
 import useStore from "@/store/userStore";
-import { Bell, User2, AlertCircle, FileText, Share2 } from 'lucide-react';
+import { Bell, User2, AlertCircle, FileText, Share2, Menu, X } from 'lucide-react';
 import { useEffect, useRef, useState } from "react";
 import { getNotificationsByUser, getRole } from '@/lib/integration';
 import { ethers } from "ethers";
 import { UserRole } from "../../utils/userRole";
 import { Notification, NotificationType } from "@/types/notification";
 
-const TopBar = ({userName}:{userName:string})=>{
+interface TopBarProps {
+  userName: string;
+  onMenuClick?: () => void;
+  isSidebarOpen?: boolean;
+}
+
+const TopBar = ({userName, onMenuClick, isSidebarOpen = false}: TopBarProps)=>{
   const role = useStore((state) => state.role);
   const [hydrated, setHydrated] = useState(false);  
   const [showDropdown, setShowDropdown] = useState(false);
@@ -123,11 +129,27 @@ const TopBar = ({userName}:{userName:string})=>{
   };
 
   return(
-    <div className="bg-blue-950 w-full flex justify-between items-center px-6 py-4 shadow-sm">
-      <div className="flex items-center space-x-6">
+    <div className="bg-blue-950 w-full flex justify-between items-center px-4 sm:px-6 py-3 sm:py-4 shadow-sm">
+      <div className="flex items-center space-x-3 sm:space-x-6 flex-1">
+        {/* Mobile menu button */}
+        {onMenuClick && (
+          <button 
+            onClick={onMenuClick}
+            className="lg:hidden hover:bg-gray-700 p-2 rounded-full transition-colors"
+            aria-label="Toggle menu"
+          >
+            {isSidebarOpen ? (
+              <X className="text-white" size={24} />
+            ) : (
+              <Menu className="text-white" size={24} />
+            )}
+          </button>
+        )}
+
+        {/* Notification bell */}
         <div className="relative">
-          <button className="hover:bg-gray-400 p-2 rounded-full" onClick={handleOpen}>
-            <Bell className="text-white" />
+          <button className="hover:bg-gray-700 p-2 rounded-full transition-colors" onClick={handleOpen}>
+            <Bell className="text-white" size={20} />
             {/* Notification count badge - only show unread */}
             {unreadCount > 0 && (
               <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-semibold">
@@ -136,16 +158,23 @@ const TopBar = ({userName}:{userName:string})=>{
             )}
           </button>
         </div>
-        {/* Dropdown */}
+
+        {/* Dropdown - Responsive */}
         {hydrated && showDropdown && (
-          <div className="absolute top-12 left-0 translate-x-28 bg-gray-900 border border-gray-700 rounded-lg w-96 shadow-lg z-50" ref={dropdownRef}>
-            <div className="p-3 border-b border-gray-700 text-white font-semibold">
+          <div 
+            className="absolute top-12 sm:top-14 left-24 sm:left-16
+                       bg-gray-900 border border-gray-700 rounded-lg 
+                       w-[calc(100vw-2rem)] sm:w-96
+                       shadow-lg z-50" 
+            ref={dropdownRef}
+          >
+            <div className="p-3 border-b border-gray-700 text-white font-semibold text-sm sm:text-base">
               Notifications
               {notifications.length > 0 && (
-                <span className="ml-2 text-sm text-gray-400">({notifications.length})</span>
+                <span className="ml-2 text-xs sm:text-sm text-gray-400">({notifications.length})</span>
               )}
             </div>
-            <div className="max-h-64 overflow-y-auto">
+            <div className="max-h-64 sm:max-h-96 overflow-y-auto">
               {notifications.length === 0 ? (
                 <div className="p-4 text-gray-400 text-sm">
                   No notifications.
@@ -154,14 +183,14 @@ const TopBar = ({userName}:{userName:string})=>{
                 notifications.map((notif) => (
                   <div
                     key={notif.id}
-                    className="p-4 border-b border-gray-800 hover:bg-gray-800 cursor-pointer transition-colors"
+                    className="p-3 sm:p-4 border-b border-gray-800 hover:bg-gray-800 cursor-pointer transition-colors"
                   >
-                    <div className="flex items-start space-x-3">
-                      <div className="mt-1">
+                    <div className="flex items-start space-x-2 sm:space-x-3">
+                      <div className="mt-1 flex-shrink-0">
                         {getNotificationIcon(notif.type)}
                       </div>
-                      <div className="flex-1">
-                        <p className="text-white text-sm">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-xs sm:text-sm break-words">
                           {notif.message}
                         </p>
                         <p className="text-gray-400 text-xs mt-1">
@@ -175,13 +204,18 @@ const TopBar = ({userName}:{userName:string})=>{
             </div>
           </div>
         )}
-        <div className="flex items-center space-x-2">
-          <button className="hover:bg-gray-400 p-2 rounded-full">
-            <User2 className="text-white" />
+
+        {/* User info - Responsive */}
+        <div className="flex items-center space-x-2 ml-auto">
+          <button className="hover:bg-gray-700 p-2 rounded-full transition-colors hidden sm:block">
+            <User2 className="text-white" size={20} />
           </button>
-          <div className="text-sm">
-            <div className="text-white font-medium">Welcome back , {userName}</div>
-            {/* <div className="text-white">{role}</div> */}
+          <div className="text-xs sm:text-sm">
+            <div className="text-white font-medium truncate max-w-[150px] sm:max-w-none">
+              <span className="hidden sm:inline">Welcome back, </span>
+              <span className="sm:hidden">Hi, </span>
+              {userName}
+            </div>
           </div>
         </div>
       </div>

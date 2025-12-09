@@ -187,24 +187,23 @@ const ShareMedicalRecordModal = ({ isOpen, onClose, selectedUser, setSelectedPat
   const currentUsers = getCurrentUsers();
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden border border-gray-700 shadow-2xl flex flex-col">
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="bg-gray-900 rounded-lg max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-hidden border border-gray-700 shadow-2xl flex flex-col">
         {/* Header */}
-        <div className="bg-gray-900 border-b border-gray-700 p-6 flex justify-between items-center">
-          <h2 className="text-white text-xl font-semibold">
+        <div className="bg-gray-900 border-b border-gray-700 p-4 sm:p-6 flex justify-between items-center">
+          <h2 className="text-white text-lg sm:text-xl font-semibold">
             Share Medical Record
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors"
-          >
-            <X size={24} />
+            className="text-gray-400 hover:text-white transition-colors p-2 -mr-2">
+            <X size={20} className="sm:w-6 sm:h-6" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="bg-gray-900 border-b border-gray-700 px-6">
-          <div className="flex gap-1">
+        <div className="bg-gray-900 border-b border-gray-700 px-3 sm:px-6">
+          <div className="flex gap-1 overflow-x-auto">
             {(['patients', 'doctors', 'insurers'] as TabName[]).map((tab) => (
               <button
                 key={tab}
@@ -213,7 +212,7 @@ const ShareMedicalRecordModal = ({ isOpen, onClose, selectedUser, setSelectedPat
                   setError(null);
                   setSelectedPatient('');
                 }}
-                className={`flex items-center gap-2 px-4 py-3 font-medium text-sm transition-colors border-b-2 ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 font-medium text-xs sm:text-sm transition-colors border-b-2 whitespace-nowrap ${
                   activeTab === tab
                     ? 'text-blue-400 border-blue-400'
                     : 'text-gray-400 border-transparent hover:text-gray-300'
@@ -227,7 +226,7 @@ const ShareMedicalRecordModal = ({ isOpen, onClose, selectedUser, setSelectedPat
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {success ? (
             <div className="flex flex-col items-center justify-center py-10 text-green-400">
               <Check size={48} className="mb-4" />
