@@ -62,7 +62,7 @@ const InsurerSideBar = ({ collapsed, setCollapsed, isMobileOpen = false, onMobil
     >
       {!collapsed && (
         <div className="mb-4">
-          <div className="font-semibold text-white text-lg">InsureChain</div>
+          <div className="font-semibold text-white text-lg">MedChain</div>
           <div className="text-white text-sm mt-1">Claims Management</div>
         </div>
       )}

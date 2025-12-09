@@ -105,3 +105,73 @@ export const changePassword = async (req, res) => {
         return res.status(500).json({ message: "Error changing password", error: error.message });
     }
 }
+
+export const getUserByWallet = async (req, res) => {
+    try {
+        const { walletAddress } = req.params;
+
+        if (!walletAddress) {
+            return res.status(400).json({ message: "Wallet address is required" });
+        }
+
+        // First, try to find user by public key (wallet address)
+        const publicKeyRecord = await prisma.publicKey.findUnique({
+            where: { publicKey: walletAddress },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                        createdAt: true
+                    }
+                }
+            }
+        });
+
+        if (publicKeyRecord && publicKeyRecord.user) {
+            return res.status(200).json(publicKeyRecord.user);
+        }
+
+        // If not found by wallet, return 404 (user hasn't logged in yet)
+        return res.status(404).json({ 
+            message: "User not found with this wallet address. User may not have logged in yet." 
+        });
+    } catch (error) {
+        console.error("Error fetching user by wallet:", error);
+        return res.status(500).json({ message: "Error fetching user", error: error.message });
+    }
+}
+
+export const getAllUsersFromDB = async (req, res) => {
+    try {
+        // Fetch all users with their public keys (wallet addresses)
+        const users = await prisma.user.findMany({
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                createdAt: true,
+                publicKeys: {
+                    select: {
+                        publicKey: true
+                    }
+                }
+            }
+        });
+
+        // Transform the data to include wallet addresses
+        const usersWithWallets = users.map(user => ({
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            createdAt: user.createdAt,
+            walletAddresses: user.publicKeys.map(pk => pk.publicKey)
+        }));
+
+        res.status(200).json(usersWithWallets);
+    } catch (error) {
+        console.error("Error fetching all users:", error);
+        return res.status(500).json({ message: "Error fetching users", error: error.message });
+    }
+}

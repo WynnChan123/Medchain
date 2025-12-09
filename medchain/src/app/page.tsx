@@ -259,11 +259,7 @@ export default function Login() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          <div className="flex items-center justify-between">
-            <label className="flex items-center space-x-2">
-              <input type="checkbox" className="text-blue-400" />
-              <span className="text-white">Remember Me</span>
-            </label>
+          <div className="flex items-center justify-end">
             <a href="/forgot-password" className="text-blue-400 hover:underline">
               Forgot Password?
             </a>

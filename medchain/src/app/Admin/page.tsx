@@ -7,6 +7,7 @@ import { getRole, getPendingRequestsByAdmin, getAcknowledgedRequestsByAdmin, app
 import { fetchAndDecryptDocuments } from '@/lib/decryption';
 import { UserRole } from '../../../utils/userRole';
 import DocumentViewerModal from '@/components/DocumentViewerModal';
+import UserDetailsModal from '@/components/UserDetailsModal';
 import useStore from '@/store/userStore';
 import { generateAndRegisterUserKey, getUserPublicKey } from '@/lib/userKeys'; // Unified imports only
 import { verifyRSAKeyPair } from '@/lib/integration'; // Address-aware verify
@@ -45,6 +46,10 @@ const Dashboard = () => {
   // Document Viewer Modal State
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<RoleUpgradeRequest | null>(null);
+  
+  // User Details Modal State
+  const [userDetailsModalOpen, setUserDetailsModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   useEffect(() => {
     const init = async () => {
@@ -528,7 +533,13 @@ const Dashboard = () => {
                     </span>
                   </td>
                   <td className="py-3 px-4">
-                    <button className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition">
+                    <button 
+                      onClick={() => {
+                        setSelectedUser(user);
+                        setUserDetailsModalOpen(true);
+                      }}
+                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition"
+                    >
                       View Details
                     </button>
                   </td>
@@ -549,6 +560,20 @@ const Dashboard = () => {
           }}
           requestId={selectedRequest.requestId.toNumber()}
           requesterAddress={selectedRequest.requester}
+        />
+      )}
+      
+      {/* User Details Modal */}
+      {userDetailsModalOpen && selectedUser && (
+        <UserDetailsModal
+          isOpen={userDetailsModalOpen}
+          onClose={() => {
+            setUserDetailsModalOpen(false);
+            setSelectedUser(null);
+          }}
+          userAddress={selectedUser.walletAddress}
+          currentRole={selectedUser.currentRole}
+          adminAddress={walletAddress}
         />
       )}
     </div>

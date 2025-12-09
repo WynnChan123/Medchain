@@ -382,7 +382,7 @@ useEffect(() => {
       {/* Quick Actions - Responsive Grid */}
       <div>
         <h3 className="text-white text-base sm:text-lg font-semibold mb-3 sm:mb-4">Quick Actions</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           {/* <ActionCard
             icon={<Upload size={24} />}
             title="Add Medical Record"
@@ -392,15 +392,17 @@ useEffect(() => {
           /> */}
           <ActionCard
             icon={<Settings size={24} />}
-            title="Manage Access"
-            description="Control who sees your records"
+            title="Edit Your Profile"
+            description="Manage your account settings"
             buttonText="Settings"
+            onClick={() => router.push('/Patient/Profile')}
           />
           <ActionCard
             icon={<Eye size={24} />}
             title="View Access History"
             description="See who accessed your data"
             buttonText="View Log"
+            onClick={() => router.push('/Patient/ViewAccessLogs')}
           />
         </div>
       </div>
@@ -487,9 +489,9 @@ useEffect(() => {
                     <td className="py-2 sm:py-3 px-2 sm:px-4 hidden lg:table-cell">
                       <button
                         onClick={() => handleSubmitClaim(record)}
-                        className="px-2 sm:px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs sm:text-sm flex items-center gap-1 whitespace-nowrap"
+                        className="px-2 sm:px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded text-xs sm:text-sm flex items-center gap-1 whitespace-nowrap"
                       >
-                        <FileText size={14} /> Claim
+                        <FileText size={14} /> Submit Claim
                       </button>
                     </td>
                   </tr>

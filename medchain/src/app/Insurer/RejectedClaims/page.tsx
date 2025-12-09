@@ -226,29 +226,6 @@ const RejectedPage = () => {
           ))}
         </div>
       </div>
-
-      {/* Common Rejection Reasons (Insights) */}
-      <div className="bg-gray-900 rounded-lg p-6 border border-gray-700">
-        <h3 className="text-white text-lg font-semibold mb-4">
-          Rejection Insights
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-gray-800 p-4 rounded-lg">
-            <p className="text-gray-400 text-sm mb-2">Most Common Reason</p>
-            <p className="text-white font-semibold">Policy Coverage Issues</p>
-            <p className="text-gray-500 text-xs mt-1">
-              Claims for services not covered under patient policy
-            </p>
-          </div>
-          <div className="bg-gray-800 p-4 rounded-lg">
-            <p className="text-gray-400 text-sm mb-2">Average Processing Time</p>
-            <p className="text-white font-semibold">2.1 days</p>
-            <p className="text-gray-500 text-xs mt-1">
-              From submission to rejection decision
-            </p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

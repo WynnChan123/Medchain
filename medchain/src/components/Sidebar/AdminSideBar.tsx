@@ -23,17 +23,7 @@ export const menuItems = [
     icon: <Building2 size={20} />,
     label: 'Organization',
     href: '/Admin/Organization',
-  },
-  {
-    icon: <Users size={20} />,
-    label: 'User Management',
-    href: '/Admin/User-management',
-  },
-  {
-    icon: <Eye size={20} />,
-    label: 'Access Control',
-    href: '/Admin/Access-control',
-  },
+  }
 ];
 
 export interface SidebarStatus{

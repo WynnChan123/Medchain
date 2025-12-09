@@ -1729,6 +1729,14 @@ export async function getNotificationsByUser(
             const claims = await getClaimDetails([claimId]);
             if (claims && claims.length > 0) {
               const claim = claims[0];
+
+              if (!claim) {
+                console.warn(`Claim ${claimId} has no data`);
+                continue;
+              }
+              console.log('Claim structure:', claim);
+              console.log('Claim keys:', Object.keys(claim));
+              
               // Only show pending claims (status 0)
               if (claim.status === 0) {
                 // Handle timestamp - use current time if timestamp is invalid
@@ -1743,11 +1751,11 @@ export async function getNotificationsByUser(
                 notifications.push({
                   id: `insurer-claim-${claimId}`,
                   type: NotificationType.PendingInsurerRequest,
-                  message: `Claim #${claimId} from ${claim.patient.slice(0, 6)}...${claim.patient.slice(-4)} requires your review`,
+                  message: `Claim #${claimId} from ${claim.patientAddress.slice(0, 6)}...${claim.patientAddress.slice(-4)} requires your review`,
                   createdAt: timestamp,
                   metadata: {
                     claimId: claimId,
-                    patient: claim.patient,
+                    patient: claim.patientAddress,
                     amount: claim.requestedAmount
                   }
                 });

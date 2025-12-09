@@ -237,25 +237,20 @@ useEffect(() => {
       {/* Quick Actions */}
       <div>
         <h3 className="text-white text-lg font-semibold mb-4">Quick Actions</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <ActionCard
             icon={<Upload size={24} />}
             title="Add Medical Record"
             description="Upload new medical documents"
             buttonText="+ Upload"
-            href="/HealthcareProvider/Upload"
+            onClick={() => router.push('/HealthcareProvider/Upload')}
           />
           <ActionCard
             icon={<Settings size={24} />}
             title="Edit Your Profile"
             description="Manage your account settings"
             buttonText="Settings"
-          />
-          <ActionCard
-            icon={<Eye size={24} />}
-            title="View Access History"
-            description="See who accessed your data"
-            buttonText="View Log"
+            onClick={() => router.push('/HealthcareProvider/Profile')}
           />
         </div>
       </div>
