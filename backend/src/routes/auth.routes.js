@@ -1,7 +1,6 @@
 import express from 'express';
 import { verifySignUp } from '../middlewares/verifySignUp.js';
-import { signUp } from '../controllers/auth.controller.js';
-import { logIn } from '../controllers/auth.controller.js';
+import { signUp, logIn, resetPassword } from '../controllers/auth.controller.js';
 
 const router = express.Router();
 
@@ -14,4 +13,10 @@ router.post('/logIn', (req, res) => {
   console.log("Login request received");
   logIn(req, res);
 });
+
+router.post('/reset-password', (req, res) => {
+  console.log("Reset password request received");
+  resetPassword(req, res);
+});
+
 export default router;

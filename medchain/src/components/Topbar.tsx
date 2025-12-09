@@ -207,7 +207,20 @@ const TopBar = ({userName, onMenuClick, isSidebarOpen = false}: TopBarProps)=>{
 
         {/* User info - Responsive */}
         <div className="flex items-center space-x-2 ml-auto">
-          <button className="hover:bg-gray-700 p-2 rounded-full transition-colors hidden sm:block">
+          <button 
+            onClick={() => {
+              // Dynamic navigation based on role
+              const roleRoutes: { [key: string]: string } = {
+                'Admin': '/Admin/Profile',
+                'Patient': '/Patient/Profile',
+                'HealthcareProvider': '/HealthcareProvider/Profile',
+                'Insurer': '/Insurer/Profile'
+              };
+              const profileRoute = role ? roleRoutes[role] || '/Patient/Profile' : '/Patient/Profile';
+              window.location.href = profileRoute;
+            }}
+            className="hover:bg-gray-700 p-2 rounded-full transition-colors hidden sm:block"
+          >
             <User2 className="text-white" size={20} />
           </button>
           <div className="text-xs sm:text-sm">

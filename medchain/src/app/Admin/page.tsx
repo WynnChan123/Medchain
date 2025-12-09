@@ -251,26 +251,26 @@ const Dashboard = () => {
   };
 
   const getRoleColor = (role: UserRole | string) => {
-    if (typeof role === 'string') {
-      // Handle string roles from mock data
-      const roleMap: Record<string, string> = {
-        'Patient': 'text-gray-300',
-        'Healthcare Provider': 'text-green-400',
-        'Insurance Provider': 'text-blue-400',
-        'Admin': 'text-purple-400'
-      };
-      return roleMap[role] || 'text-gray-400';
+    // Convert role to string for comparison
+    let roleString: string;
+    
+    if (typeof role === 'number') {
+      // It's a UserRole enum value, convert to string
+      roleString = UserRole[role];
+    } else {
+      roleString = role;
     }
     
-    // Handle UserRole enum
-    const colors: Record<UserRole, string> = {
-      [UserRole.Unregistered]: 'text-gray-400',
-      [UserRole.Patient]: 'text-gray-300',
-      [UserRole.HealthcareProvider]: 'text-green-400',
-      [UserRole.Insurer]: 'text-blue-400',
-      [UserRole.Admin]: 'text-purple-400'
+    // Map role names to colors
+    const roleColorMap: Record<string, string> = {
+      'Unregistered': 'text-gray-400',
+      'Patient': 'text-gray-300',
+      'HealthcareProvider': 'text-green-400',
+      'Insurer': 'text-blue-400',
+      'Admin': 'text-purple-400'
     };
-    return colors[role] || 'text-gray-400';
+    
+    return roleColorMap[roleString] || 'text-gray-400';
   };
 
   const filteredUsers = users.filter(user => {
@@ -494,8 +494,8 @@ const Dashboard = () => {
             >
               <option>All Roles</option>
               <option>Patient</option>
-              <option>Healthcare Provider</option>
-              <option>Insurance Provider</option>
+              <option>HealthcareProvider</option>
+              <option>Insurer</option>
               <option>Admin</option>
             </select>
             <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
