@@ -18,6 +18,7 @@ import SharedDocumentsTable from '@/components/SharedDocumentsTable';
 import PatientRecordViewerModal from '@/components/PatientRecordViewerModal';
 import { useRouter } from 'next/navigation';
 import { generateAndRegisterUserKey, getUserPublicKey } from '@/lib/userKeys';
+import { GiSkeleton } from "react-icons/gi";
 
 interface SharedRecord {
   recordId: string;
@@ -56,6 +57,7 @@ const HealthcareProviderDashboard = () => {
   );
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const router = useRouter();
+  const [isVerified, setIsVerified] = useState<boolean>(false); // Changed from query param to state
 
 useEffect(() => {
     const init = async () => {
@@ -68,12 +70,18 @@ useEffect(() => {
 
       console.log('User role:', userRole);
 
-      if (userRole !== UserRole.HealthcareProvider) {
-        console.log('User is not a Healthcare Provider');
+      // Check if user is verified (has HealthcareProvider role)
+      const userIsVerified = userRole === UserRole.HealthcareProvider;
+      setIsVerified(userIsVerified); // Set verification state
+
+      if (!userIsVerified) {
+        console.log('User is not verified yet (no HealthcareProvider role)');
+        // Don't return - let them see the dashboard with skeleton icons
+        // Skip all the key generation and record fetching
         return;
       }
 
-      // Set role IMMEDIATELY
+      // Set role IMMEDIATELY (only for verified users)
       setSecondRole('Healthcare Provider');
 
       // Unified key check and generation (mirrors patient dashboard)
@@ -112,7 +120,13 @@ useEffect(() => {
           console.error("❌ RSA keypair verification failed. Keys mismatch.");
           
           // Check for existing records before auto-regen (doctor-specific, e.g., created records)
-          const created = await getCreatedRecords(userAddress);
+          // Only check if user is verified (has HealthcareProvider role on-chain)
+          let created = [];
+          try {
+            created = await getCreatedRecords(userAddress);
+          } catch (e) {
+            console.log('Could not fetch created records (user may not be verified yet)');
+          }
           if (created && created.length > 0) {
             const userChoice = confirm(
               "Key mismatch detected!\n\nLocal private key doesn't match on-chain public key.\n\nRegenerating will lock existing records FOREVER.\n\nContinue and regenerate? (Refresh/reconnect wallet to retry.)"
@@ -139,8 +153,12 @@ useEffect(() => {
         }
       }
 
-      // Fetch shared records after key handling (always, but safe now)
-      await fetchSharedRecords(userAddress);
+      // Fetch shared records after key handling (only if verified)
+      if (isVerified) {
+        await fetchSharedRecords(userAddress);
+      } else {
+        console.log('User not verified, skipping shared records fetch');
+      }
     };
 
     init();
@@ -176,13 +194,21 @@ useEffect(() => {
   }, []);
 
   useEffect(() => {
-    if (walletAddress) {
+    if (walletAddress && isVerified) {
       fetchMedicalRecords();
     }
-  }, [walletAddress]);
+  }, [walletAddress, isVerified]);
 
   const fetchMedicalRecords = async () => {
     console.log('My wallet address: ', walletAddress);
+    
+    // Skip fetching if user is not verified
+    if (!isVerified) {
+      console.log('User not verified, skipping created records fetch');
+      setCreatedRecords([]);
+      return;
+    }
+    
     try {
       const records = await getCreatedRecords(walletAddress);
       console.log('My records created (RAW): ', records);
@@ -319,16 +345,20 @@ useEffect(() => {
               </tbody>
             </table>
           </div>
-        ) : (
-          <div className="text-center py-8 text-gray-400">
+        ) : ((isVerified?
+          (<div className="text-center py-8 text-gray-400">
             <FileText size={48} className="mx-auto mb-3 opacity-50" />
             <p>No records yet - Add your first medical record</p>
+          </div>):
+          <div className="text-center justify-items-center py-8 text-gray-400">
+            <GiSkeleton size={64} className="mx-auto mb-3 opacity-50" />
+            <p>Your account is awaiting verification</p>
           </div>
-        )}
+        ))}
       </div>
 
       {/* Shared With */}
-      <SharedDocumentsTable walletAddress={walletAddress} />
+      <SharedDocumentsTable walletAddress={walletAddress} isVerified={isVerified} />
 
       {/* Role Upgrade Modal */}
       {isModalOpen && (

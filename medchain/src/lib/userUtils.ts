@@ -2,7 +2,6 @@
 
 interface UserProfile {
   name: string;
-  email: string;
   publicKey: string;
 }
 

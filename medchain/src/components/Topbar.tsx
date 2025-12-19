@@ -1,6 +1,6 @@
 "use client";
 import useStore from "@/store/userStore";
-import { Bell, User2, AlertCircle, FileText, Share2, Menu, X } from 'lucide-react';
+import { Bell, User2, AlertCircle, FileText, Share2, Menu, X, CheckCircle, Clock } from 'lucide-react';
 import { useEffect, useRef, useState } from "react";
 import { getNotificationsByUser, getRole } from '@/lib/integration';
 import { ethers } from "ethers";
@@ -20,7 +20,8 @@ const TopBar = ({userName, onMenuClick, isSidebarOpen = false}: TopBarProps)=>{
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
+  const [isVerified, setIsVerified] = useState<boolean>(true); // Default to true, will update from blockchain
+  
   useEffect(() => {
     setHydrated(true);
   }, []);
@@ -77,6 +78,17 @@ const TopBar = ({userName, onMenuClick, isSidebarOpen = false}: TopBarProps)=>{
         const signer = provider.getSigner();
         const userAddress = await signer.getAddress();
         const userRole = await getRole(userAddress);
+        console.log('My ROLE: ', userRole);
+
+        // Check verification status based on role
+        if (userRole === UserRole.HealthcareProvider || userRole === UserRole.Insurer) {
+          setIsVerified(true);
+        } else if (userRole === UserRole.Unregistered) {
+          // Check if they have pending requests (unverified)
+          setIsVerified(false);
+        } else {
+          setIsVerified(true); // Admin and Patient are always "verified"
+        }
 
         // Fetch notifications for all roles
         const fetchedNotifications = await getNotificationsByUser(userAddress, userRole);
@@ -205,7 +217,7 @@ const TopBar = ({userName, onMenuClick, isSidebarOpen = false}: TopBarProps)=>{
           </div>
         )}
 
-        {/* User info - Responsive */}
+        {/* User info - Responsive (kept ml-auto to push it right within flex-1) */}
         <div className="flex items-center space-x-2 ml-auto">
           <button 
             onClick={() => {
@@ -232,6 +244,26 @@ const TopBar = ({userName, onMenuClick, isSidebarOpen = false}: TopBarProps)=>{
           </div>
         </div>
       </div>
+      
+      {hydrated && (role === 'HealthcareProvider' || role === 'Insurer' || role === 'Unregistered') && (
+        <div className={`flex items-center gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs sm:text-sm font-medium mr-4 sm:mr-6 ${
+          isVerified 
+            ? 'bg-green-900 text-green-200 border border-green-700' 
+            : 'bg-yellow-900 text-yellow-200 border border-yellow-700'
+        }`}>
+          {isVerified ? (
+            <>
+              <CheckCircle size={14} className="hidden sm:block" />
+              <span className="whitespace-nowrap">Verified</span>
+            </>
+          ) : (
+            <>
+              <Clock size={14} className="hidden sm:block" />
+              <span className="whitespace-nowrap">Unverified</span>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -63,18 +63,19 @@ contract UserManagement is Med2ChainStructs {
 
             userRoles[walletAddress][userRole.Patient] = true;
         }
-        // else{
-        //     require(users[sender].role == userRole.Admin, "Only admin can register users");
-        //     users[walletAddress] = User({
-        //         role: role,
-        //         createdAt: block.timestamp,
-        //         encryptedId: encryptedId,
-        //         isActive: true,
-        //         walletAddress: walletAddress,
-        //         authorizedBy: sender,
-        //         isWalletRegistered: true
-        //     });
-        // }
+        else{
+            // Admin registering user with non-Patient role
+            users[walletAddress] = User({
+                createdAt: block.timestamp,
+                encryptedId: encryptedId,
+                isActive: true,
+                walletAddress: walletAddress,
+                authorizedBy: sender,
+                isWalletRegistered: true
+            });
+
+            userRoles[walletAddress][role] = true;
+        }
 
         encryptedIdToUser[encryptedId] = users[walletAddress];  //map the user data to the encrypted ID
 

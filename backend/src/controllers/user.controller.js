@@ -9,8 +9,6 @@ export const getUserProfile = async (req, res) => {
             select: {
                 id: true,
                 name: true,
-                email: true,
-                // role: true,
             }
         });
 
@@ -41,7 +39,6 @@ export const updateProfile = async (req, res) => {
             select: {
                 id: true,
                 name: true,
-                email: true,
             }
         });
 
@@ -56,6 +53,12 @@ export const updateProfile = async (req, res) => {
 }
 
 export const changePassword = async (req, res) => {
+    // Password functionality disabled - using wallet-based authentication only
+    return res.status(400).json({ 
+        message: "Password authentication is disabled. This application uses wallet-based authentication only." 
+    });
+    
+    /* DISABLED - Password field removed from schema
     try {
         const userId = req.user.userId;
         const { currentPassword, newPassword } = req.body;
@@ -104,6 +107,7 @@ export const changePassword = async (req, res) => {
         console.error("Error changing password:", error);
         return res.status(500).json({ message: "Error changing password", error: error.message });
     }
+    */
 }
 
 export const getUserByWallet = async (req, res) => {
@@ -122,7 +126,6 @@ export const getUserByWallet = async (req, res) => {
                     select: {
                         id: true,
                         name: true,
-                        email: true,
                         createdAt: true
                     }
                 }
@@ -150,7 +153,6 @@ export const getAllUsersFromDB = async (req, res) => {
             select: {
                 id: true,
                 name: true,
-                email: true,
                 createdAt: true,
                 publicKeys: {
                     select: {
@@ -164,7 +166,6 @@ export const getAllUsersFromDB = async (req, res) => {
         const usersWithWallets = users.map(user => ({
             id: user.id,
             name: user.name,
-            email: user.email,
             createdAt: user.createdAt,
             walletAddresses: user.publicKeys.map(pk => pk.publicKey)
         }));

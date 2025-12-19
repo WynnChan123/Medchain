@@ -66,6 +66,9 @@ const Dashboard = () => {
 
       // NEW: Unified key check and generation for Admin (no old imports/fallbacks)
       if (userRole === UserRole.Admin) {
+        // Check if we've already verified keys this session
+        const sessionKeyVerified = sessionStorage.getItem(`keyVerified_${address}`);
+        
         // Cleanup legacy keys first (one-time)
         await cleanupLegacyKeys(address);
         console.log('🧹 Cleaned up legacy keys for admin', address);
@@ -90,11 +93,14 @@ const Dashboard = () => {
           if (!onChainPublicKey) {
             console.error('❌ Failed to confirm on-chain key after generation');
             setHasPublicKey(true); // Proceed optimistically
+            sessionStorage.setItem(`keyVerified_${address}`, 'true');
             await fetchRequests(address); // Continue to fetch
             return;
           }
           setHasPublicKey(true);
-        } else {
+          sessionStorage.setItem(`keyVerified_${address}`, 'true');
+        } else if (!sessionKeyVerified) {
+          // Only verify if we haven't verified this session
           console.log('✅ Both keys found. Verifying match...');
           
           // Always verify (address-aware)
@@ -113,6 +119,7 @@ const Dashboard = () => {
               if (!userChoice) {
                 console.log("❌ User aborted regeneration. Proceeding anyway.");
                 setHasPublicKey(true);
+                sessionStorage.setItem(`keyVerified_${address}`, 'true');
                 await fetchRequests(address); // Proceed to fetch
                 return;
               }
@@ -123,18 +130,24 @@ const Dashboard = () => {
             onChainPublicKey = await getUserPublicKey(address);
             localStorage.setItem('userPublicKey', onChainPublicKey || ''); // Unified LS
             setHasPublicKey(true);
+            sessionStorage.setItem(`keyVerified_${address}`, 'true');
             alert("Your keys were mismatched and have been automatically regenerated. Old encrypted data is no longer accessible.");
           } else {
             console.log('✅ Keypair verified successfully.');
             // Sync localStorage
             localStorage.setItem('userPublicKey', onChainPublicKey);
             setHasPublicKey(true);
+            sessionStorage.setItem(`keyVerified_${address}`, 'true');
           }
+        } else {
+          // Already verified this session, skip verification
+          console.log('✅ Keys already verified this session. Skipping verification.');
+          setHasPublicKey(true);
         }
-
-        // Fetch requests after key handling
-        await fetchRequests(address);
       }
+
+      // Fetch requests after key handling
+      await fetchRequests(address);
 
       // Fetch users (unchanged)
       console.log('Fetching users for admin dashboard...');
@@ -209,14 +222,27 @@ const Dashboard = () => {
           
           const metadata = documents[0].metadata;
           
+          // Log the entire metadata for debugging
+          console.log('=== METADATA DEBUG ===');
+          console.log('Full metadata object:', JSON.stringify(metadata, null, 2));
+          console.log('metadata.doctorName:', metadata.doctorName);
+          console.log('metadata.organization:', metadata.organization);
+          console.log('metadata.role:', metadata.role);
+          console.log('======================');
+          
           if (request.newRole === UserRole.Insurer) {
             roleName = metadata.organization;
+            console.log('Insurer - Using organization:', roleName);
           } else if (request.newRole === UserRole.HealthcareProvider) {
-            roleName = metadata.doctorName || '';
+            // Try doctorName first, fallback to organization if not found
+            roleName = metadata.doctorName || metadata.organization || '';
+            console.log('Healthcare Provider - doctorName:', metadata.doctorName);
+            console.log('Healthcare Provider - organization:', metadata.organization);
+            console.log('Healthcare Provider - Final roleName:', roleName);
           }
           
           if (!roleName) {
-             throw new Error('Required name (Organization or Doctor Name) is missing in document metadata.');
+             throw new Error('Required name (Organization or Doctor Name) is missing in document metadata. Metadata: ' + JSON.stringify(metadata));
           }
         } catch (err: any) {
           console.error('Error fetching documents for approval:', err);

@@ -8,48 +8,33 @@ import 'dotenv/config';
 const DEPLOYED_CONTRACT = process.env.CONTRACT_ADDRESS;
 
 export const signUp = async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, publicKey } = req.body;
 
   try {
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (existingUser) {
-      return res.status(400).json({ message: 'User already exists' });
+    // Validate required fields
+    if (!name) {
+      return res.status(400).json({ message: 'Name is required' });
+    }
+    
+    if (!publicKey) {
+      return res.status(400).json({ message: 'Wallet address (publicKey) is required' });
     }
 
-    // Find organization by name
-    // let organization = await prisma.organization.findFirst({
-    //   where: { name: organizationName },
-    // });
-
-    // If organization doesn't exist, create it
-    // if (!organization) {
-    //   console.log(`Creating new organization: ${organizationName}`);
-    //   organization = await prisma.organization.create({
-    //     data: {
-    //       name: organizationName,
-    //       Type: 'Hospital', // Default type
-    //       address: '0x0000000000000000000000000000000000000000', // Default address
-    //     },
-    //   });
-    // }
-
-    const hashedPassword = await bcrypt.hash(password, 8);
+    // Create user with linked wallet address
     const newUser = await prisma.user.create({
-      data: {
+      data: { 
         name,
-        email,
-        password: hashedPassword,
-        // organizationId: organization.id,
+        publicKeys: {
+          create: {
+            publicKey: publicKey,
+          },
+        },
       },
     });
 
     res.status(201).json({
       message: 'User registered successfully',
       userId: newUser.id,
-      // organization: organization.name,
     });
   } catch (error) {
     console.error('Sign up error:', error);
@@ -60,63 +45,153 @@ export const signUp = async (req, res) => {
 };
 
 export const logIn = async (req, res) => {
-  const { email, password, publicKey } = req.body;
+  const { publicKey } = req.body;
 
   try {
-    if (!email || !password || !publicKey || !isAddress(publicKey)) {
+    if (!publicKey || !isAddress(publicKey)) {
       return res
         .status(400)
-        .json({ message: 'Email, password, and publicKey are required' });
+        .json({ message: 'Valid wallet address is required for login' });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-      // include: {
-      //   organization: true,
-      // },
-    });
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    const isPassWordValid = await bcrypt.compare(password, user.password);
-    if (!isPassWordValid) {
-      return res
-        .status(401)
-        .json({ accessToken: null, message: 'Invalid Password' });
-    }
-
-    let keyRecord;
+    // Check blockchain status before allowing login
     try {
-      keyRecord = await prisma.publicKey.findUnique({
-        where: { publicKey },
-      });
+      const provider = new ethers.JsonRpcProvider(process.env.SEPOLIA_RPC);
+      
+      // Load UserManagement contract ABI
+      const userManagementABI = [
+        "function userExists(address user) external view returns (bool)"
+      ];
+      const userManagementContract = new ethers.Contract(
+        process.env.USER_MANAGEMENT_ADDRESS,
+        userManagementABI,
+        provider
+      );
 
-      if (!keyRecord) {
-        keyRecord = await prisma.publicKey.create({
-          data: {
-            userId: user.id,
-            publicKey: publicKey,
-          },
-        });
-      } else if (keyRecord.userId !== user.id) {
-        // This publicKey is already associated with another user
-        return res.status(400).json({
-          message:
-            'This wallet address is already associated with another user.',
+      // Load RoleUpgrade contract ABI
+      const roleUpgradeABI = [
+        "function getPendingRequestByUser(address userAddress) external view returns (tuple(uint requestId, uint8 newRole, bool isProcessed, bool isApproved, address[] adminAddresses, address requester, uint256 timestamp, string cid)[])"
+      ];
+      const roleUpgradeContract = new ethers.Contract(
+        process.env.ROLE_UPGRADE_ADDRESS,
+        roleUpgradeABI,
+        provider
+      );
+
+      // Check if user exists on blockchain
+      const existsOnChain = await userManagementContract.userExists(publicKey);
+      
+      // Check if user has pending role upgrade requests
+      let hasPendingRequest = false;
+      try {
+        const pendingRequests = await roleUpgradeContract.getPendingRequestByUser(publicKey);
+        hasPendingRequest = pendingRequests && pendingRequests.length > 0;
+      } catch (error) {
+        console.log('Error checking pending requests:', error.message);
+        // Continue - user might not have any requests
+      }
+
+      // If user doesn't exist on-chain AND has no pending requests, deny login
+      // This is typically for patients who need to register first
+      if (!existsOnChain && !hasPendingRequest) {
+        return res.status(403).json({ 
+          message: 'User not registered, please register an account first' 
         });
       }
-    } catch (error) {
-      return res.status(500).json({
-        message: 'Failed to register a new public key',
-        error: error.message,
+
+      console.log('Blockchain validation passed:', {
+        publicKey,
+        existsOnChain,
+        hasPendingRequest
       });
+
+    } catch (blockchainError) {
+      console.error('Blockchain validation error:', blockchainError);
+      // If blockchain check fails, deny login for security
+      return res.status(500).json({ 
+        message: 'Unable to verify blockchain status. Please try again later.',
+        error: blockchainError.message 
+      });
+    }
+
+    // First, check if this publicKey already exists in database
+    let keyRecord = await prisma.publicKey.findUnique({
+      where: { publicKey },
+      include: { user: true }, // Include the associated user
+    });
+
+    let user;
+    
+    if (keyRecord) {
+      // PublicKey exists, use the associated user
+      user = keyRecord.user;
+    } else {
+      // User doesn't exist in database yet, but is valid on blockchain
+      // Create a user record to allow login
+      // This allows users with pending role upgrade requests to login
+      // and see their dashboard with unverified status
+      console.log('Creating new user record for wallet:', publicKey);
+      
+      // Try to fetch the user's name from blockchain (for users with pending requests)
+      let userName = 'User'; // Default fallback
+      
+      try {
+        const provider = new ethers.JsonRpcProvider(process.env.SEPOLIA_RPC);
+        
+        // Check if user has pending role upgrade request with their name
+        const roleUpgradeABI = [
+          "function getPendingRequestByUser(address userAddress) external view returns (tuple(uint requestId, uint8 newRole, bool isProcessed, bool isApproved, address[] adminAddresses, address requester, uint256 timestamp, string cid)[])",
+          "function providerProfiles(address) external view returns (string doctorName, bool isRegistered, uint256 registrationTimestamp)",
+          "function insurerProfiles(address) external view returns (string companyName, bool isRegistered, uint256 registrationTimestamp)"
+        ];
+        const roleUpgradeContract = new ethers.Contract(
+          process.env.ROLE_UPGRADE_ADDRESS,
+          roleUpgradeABI,
+          provider
+        );
+
+        // Check if user is an approved provider/insurer with a profile
+        try {
+          const providerProfile = await roleUpgradeContract.providerProfiles(publicKey);
+          if (providerProfile.isRegistered && providerProfile.doctorName) {
+            userName = providerProfile.doctorName;
+            console.log('Found doctor name from blockchain:', userName);
+          }
+        } catch (e) {
+          // Not a provider, try insurer
+          try {
+            const insurerProfile = await roleUpgradeContract.insurerProfiles(publicKey);
+            if (insurerProfile.isRegistered && insurerProfile.companyName) {
+              userName = insurerProfile.companyName;
+              console.log('Found company name from blockchain:', userName);
+            }
+          } catch (e2) {
+            // Not an insurer either, keep default 'User'
+            console.log('No profile found on blockchain, using default name');
+          }
+        }
+      } catch (error) {
+        console.log('Error fetching name from blockchain:', error.message);
+        // Keep default 'User' name
+      }
+      
+      user = await prisma.user.create({
+        data: {
+          name: userName,
+          publicKeys: {
+            create: {
+              publicKey: publicKey,
+            },
+          },
+        },
+      });
+      
+      console.log('New user created with ID:', user.id, 'and name:', userName);
     }
 
     const token = jwt.sign(
       {
         id: user.id,
-        // organizationId: user.organizationId,
       },
       authConfig.secret,
       {
@@ -129,52 +204,13 @@ export const logIn = async (req, res) => {
       user: {
         id: user.id,
         name: user.name,
-        email: user.email,
-        // organization: user.organization.name,
-        publicKey: keyRecord.publicKey,
+        publicKey: publicKey, // Use the publicKey from request, not keyRecord
       },
     });
   } catch (error) {
+    console.error('Login error:', error);
     return res
       .status(500)
       .json({ message: 'Error logging in', error: error.message });
-  }
-};
-
-export const resetPassword = async (req, res) => {
-  const { email, newPassword } = req.body;
-
-  try {
-    // Validation
-    if (!email || !newPassword) {
-      return res.status(400).json({ message: 'Email and new password are required' });
-    }
-
-    if (newPassword.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
-    }
-
-    // Find user by email
-    const user = await prisma.user.findUnique({
-      where: { email: email.trim() },
-    });
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found with this email address' });
-    }
-
-    // Hash new password
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-    // Update password
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { password: hashedPassword },
-    });
-
-    res.status(200).json({ message: 'Password reset successfully' });
-  } catch (error) {
-    console.error('Error resetting password:', error);
-    return res.status(500).json({ message: 'Error resetting password', error: error.message });
   }
 };

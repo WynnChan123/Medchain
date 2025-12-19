@@ -559,16 +559,10 @@ export async function submitRoleUpgradeRequest(
       throw new Error(`Invalid role: ${metadata.role}`);
     }
 
-    if(roleEnum === UserRole.Insurer){
-      companyName = metadata.organization;
-      doctorName = '';
-    }else if(roleEnum === UserRole.HealthcareProvider){
-      companyName = '';
-      doctorName = doctorName;
-    }else{
-      companyName = '';
-      doctorName = '';
-    }
+    // companyName and doctorName are already passed as parameters from the caller
+    // No need to overwrite them here
+    console.log('Final companyName to submit:', companyName);
+    console.log('Final doctorName to submit:', doctorName);
 
     console.log('Role enum:', roleEnum);
 
@@ -1084,10 +1078,10 @@ export async function getClaimFiles(cid: string, insurerAddress: string) {
   }
 }
 
-export async function getPendingRequestByUser(patientAddress: string) {
+export async function getPendingRequestByUser(userAddress: string) {
   try {
     const contract = await readUpgradeContract();
-    const tx = await contract.getPendingRequestByUser(patientAddress);
+    const tx = await contract.getPendingRequestByUser(userAddress);
     return tx;
   } catch (error) {
     console.log("Failed to return the user's request", error);

@@ -1,8 +1,12 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { getClaimsByInsurer, getClaimDetails, getInsurerStatistics } from '@/lib/integration';
+import { getClaimsByInsurer, getClaimDetails, getInsurerStatistics, getRole } from '@/lib/integration';
 import InsurerSharedRecordsTable from '@/components/InsurerSharedRecordsTable';
+import { GiSkeleton } from 'react-icons/gi';
+import { ethers } from 'ethers';
+import { UserRole } from '../../../utils/userRole';
+import useStore from '@/store/userStore';
 
 interface Claim {
   claimId: number;
@@ -34,15 +38,37 @@ const InsurerDashboard = () => {
     totalApprovedAmount: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [isVerified, setIsVerified] = useState<boolean>(false);
+  const setRole = useStore((state) => state.setRole);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       if (window.ethereum) {
         try {
+          const provider = new ethers.providers.Web3Provider(window.ethereum);
+          const signer = provider.getSigner();
+          const userAddress = await signer.getAddress();
+          setWalletAddress(userAddress);
+          
+          // Check verification status from blockchain
+          const userRole = await getRole(userAddress);
+          const userIsVerified = userRole === UserRole.Insurer;
+          setIsVerified(userIsVerified);
+          
+          // Set role in store for Topbar navigation
+          // Set 'Insurer' for both verified insurers AND unverified users with pending requests
+          // This allows profile navigation to work correctly
+          setRole('Insurer');
+          
+          if (!userIsVerified) {
+            console.log('User is not verified yet (no Insurer role)');
+            setLoading(false);
+            return;
+          }
+          
+          // Only fetch data if verified
           const accounts = await window.ethereum.request({ method: 'eth_accounts' });
           if (accounts[0]) {
-            setWalletAddress(accounts[0]);
-            
             // Fetch Claims
             const claimIds = await getClaimsByInsurer(accounts[0]);
             const details = await getClaimDetails(claimIds);
@@ -117,7 +143,7 @@ const InsurerDashboard = () => {
       </div>
 
       {/* Shared Records Table */}
-      <InsurerSharedRecordsTable walletAddress={walletAddress} claims={claims} />
+      <InsurerSharedRecordsTable walletAddress={walletAddress} claims={claims} isVerified={isVerified} />
 
       {/* Recent Claims */}
       <div className="bg-gray-900 rounded-lg p-6 border border-gray-700">
@@ -125,7 +151,14 @@ const InsurerDashboard = () => {
         {loading ? (
           <p className="text-gray-400">Loading claims...</p>
         ) : claims.length === 0 ? (
-          <p className="text-gray-400">No claims found.</p>
+          isVerified ? (
+            <p className="text-gray-400">No claims found.</p>
+          ) : (
+            <div className="text-center justify-items-center py-8 text-gray-400">
+              <GiSkeleton size={64} className="mx-auto mb-3 opacity-50" />
+              <p>Your account is awaiting verification</p>
+            </div>
+          )
         ) : (
           <div className="space-y-3">
             {claims.slice(0, 3).map((claim) => (
