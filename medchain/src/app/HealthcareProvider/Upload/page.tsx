@@ -1,8 +1,12 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Upload, FileText, Image, File, X } from 'lucide-react';
 import PatientShareListModal from '@/components/PatientShareListModal';
+import { GiSkeleton } from 'react-icons/gi';
+import { getRole } from '@/lib/integration';
+import { UserRole } from '../../../../utils/userRole';
+import { ethers } from 'ethers';
 
 type uploadedFile = {
   id:number,
@@ -17,6 +21,70 @@ const UploadPage = () => {
   const [dragActive, setDragActive] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<string>('');
+  const [isVerified, setIsVerified] = useState<boolean | null>(null); // null = loading
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Check verification status on mount
+  useEffect(() => {
+    const checkVerification = async () => {
+      try {
+        if (!window.ethereum) {
+          setIsVerified(false);
+          setIsLoading(false);
+          return;
+        }
+
+        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        const signer = provider.getSigner();
+        const userAddress = await signer.getAddress();
+        const role = await getRole(userAddress);
+
+        // User is verified if they have HealthcareProvider role
+        setIsVerified(role === UserRole.HealthcareProvider);
+      } catch (error) {
+        console.error('Error checking verification:', error);
+        setIsVerified(false);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkVerification();
+  }, []);
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-white font-bold text-3xl mb-2">Upload Files</h1>
+        <p className="text-gray-400 mb-6">Upload documents you want to share</p>
+        
+        <div className="bg-gray-800 rounded-lg p-12 border border-gray-700">
+          <div className="text-center py-8 text-gray-400">
+            <p>Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If user is not verified, show skeleton message
+  if (!isVerified) {
+    return (
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-white font-bold text-3xl mb-2">Upload Files</h1>
+        <p className="text-gray-400 mb-6">Upload documents you want to share</p>
+        
+        <div className="bg-gray-800 rounded-lg p-12 border border-gray-700">
+          <div className="text-center justify-items-center py-8 text-gray-400">
+            <GiSkeleton size={64} className="mx-auto mb-3 opacity-50" />
+            <p className="text-lg">Your account is awaiting verification</p>
+            <p className="text-sm mt-2">You'll be able to upload medical records once your account is approved by an admin</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // DRAG AND DROP LOGIC EXPLANATION:
   // Step 1: handleDrag - Detects when user drags files over the drop zone

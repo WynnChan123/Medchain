@@ -48,10 +48,7 @@ interface SharedRecord {
 }
 
 const PatientDashboard = () => {
-  const [selectedRole, setSelectedRole] = useState('');
   const [walletAddress, setWalletAddress] = useState('');
-  const [showPendingBanner, setShowPendingBanner] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const role = useStore((state) => state.role);
   const [secondRole, setSecondRole] = useState('');
   const [selectedRecord, setSelectedRecord] = useState<medicalDocuments | null>(
@@ -328,35 +325,6 @@ useEffect(() => {
 
   return (
     <div className="space-y-6">
-      {/* Pending Banner */}
-      {showPendingBanner && (
-        <div className="bg-yellow-900 border border-yellow-700 rounded-lg p-4 flex items-start gap-4">
-          <Clock className="text-yellow-400 mt-1" size={20} />
-          <div className="flex-1">
-            <h3 className="text-yellow-100 font-semibold mb-1">
-              ⏳ Role Upgrade Pending
-            </h3>
-            <p className="text-yellow-200 text-sm mb-2">
-              Your request to become a Healthcare Provider is under review.
-              You'll be notified once an admin approves.
-            </p>
-            <p className="text-yellow-300 text-xs mb-3">
-              Submitted: {new Date().toLocaleDateString()}
-            </p>
-            <div className="flex gap-3">
-              <button className="px-4 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm">
-                View Details
-              </button>
-              <button
-                onClick={() => setShowPendingBanner(false)}
-                className="px-4 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm"
-              >
-                Cancel Request
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Welcome Card - Responsive */}
       <div className="bg-gradient-to-r from-blue-900 to-blue-800 rounded-lg p-4 sm:p-6 shadow-lg border border-blue-700">
@@ -366,17 +334,6 @@ useEffect(() => {
         <p className="text-blue-200 text-sm sm:text-base mb-4">
           Current Role: {secondRole == '' ? role : secondRole}
         </p>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-          <p className="text-blue-100 text-xs sm:text-sm">
-            Want to become a Healthcare Provider or Insurer?
-          </p>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="w-full sm:w-auto px-4 py-2 bg-white text-blue-900 rounded-lg font-medium hover:bg-blue-50 transition flex items-center justify-center gap-2 text-sm"
-          >
-            Request Role Upgrade →
-          </button>
-        </div>
       </div>
 
       {/* Quick Actions - Responsive Grid */}
@@ -626,23 +583,6 @@ useEffect(() => {
 
       {/* Shared Documents Table */}
       <SharedDocumentsTable walletAddress={walletAddress} />
-
-      {/* Role Upgrade Modal */}
-      {isModalOpen && (
-        <RoleUpgradeModal
-          isOpen={isModalOpen}
-          onClose={() => {
-            setIsModalOpen(false);
-            setSelectedRole('');
-          }}
-          // onSubmit={() => {
-          //   setShowPendingBanner(true);
-          //   setIsModalOpen(false);
-          // }}
-          selectedRole={selectedRole}
-          setSelectedRole={setSelectedRole}
-        />
-      )}
 
       {viewDocumentModal && (
         <PatientRecordViewerModal

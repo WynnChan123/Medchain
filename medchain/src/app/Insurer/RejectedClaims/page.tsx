@@ -2,8 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { FileText, AlertCircle } from 'lucide-react';
-import { getClaimsByInsurer, getClaimDetails } from '@/lib/integration';
+import { getClaimsByInsurer, getClaimDetails, getRole } from '@/lib/integration';
 import { ethers } from 'ethers';
+import { GiSkeleton } from 'react-icons/gi';
+import { UserRole } from '../../../../utils/userRole';
 
 interface Claim {
   claimId: number;
@@ -24,6 +26,7 @@ interface Claim {
 const RejectedPage = () => {
   const [rejectedClaims, setRejectedClaims] = useState<Claim[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isVerified, setIsVerified] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchClaims = async () => {
@@ -32,6 +35,17 @@ const RejectedPage = () => {
           const provider = new ethers.providers.Web3Provider(window.ethereum);
           const signer = provider.getSigner();
           const address = await signer.getAddress();
+          
+          // Check verification status from blockchain
+          const userRole = await getRole(address);
+          const userIsVerified = userRole === UserRole.Insurer;
+          setIsVerified(userIsVerified);
+          
+          if (!userIsVerified) {
+            console.log('User is not verified yet (no Insurer role)');
+            setLoading(false);
+            return;
+          }
           
           const claimIds = await getClaimsByInsurer(address);
           const details = await getClaimDetails(claimIds);
@@ -160,10 +174,17 @@ const RejectedPage = () => {
             </table>
           </div>
         ) : (
-          <div className="text-center py-8 text-gray-400">
-            <FileText size={48} className="mx-auto mb-3 opacity-50" />
-            <p>No rejected claims found</p>
-          </div>
+          isVerified ? (
+            <div className="text-center py-8 text-gray-400">
+              <FileText size={64} className="mx-auto mb-3 opacity-50" />
+              <p>No rejected claims found</p>
+            </div>
+          ) : (
+            <div className="text-center justify-items-center py-8 text-gray-400">
+              <GiSkeleton size={64} className="mx-auto mb-3 opacity-50" />
+              <p>Your account is awaiting verification</p>
+            </div>
+          )
         )}
       </div>
 

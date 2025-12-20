@@ -4,6 +4,7 @@ import { getSharedRecordsWithDetails } from '@/lib/integration';
 import { getUsernamesByWallets } from '@/lib/userUtils';
 import PatientRecordViewerModal from './PatientRecordViewerModal';
 import { ethers } from 'ethers';
+import { GiSkeleton } from 'react-icons/gi';
 
 interface Claim {
   claimId: number;
@@ -24,6 +25,7 @@ interface Claim {
 interface InsurerSharedRecordsTableProps {
   walletAddress: string;
   claims: Claim[];
+  isVerified?: boolean;
 }
 
 interface SharedRecord {
@@ -48,7 +50,7 @@ const STATUS_COLORS = [
   'bg-red-900 text-red-200 border-red-800',       // Rejected
 ];
 
-const InsurerSharedRecordsTable: React.FC<InsurerSharedRecordsTableProps> = ({ walletAddress, claims }) => {
+const InsurerSharedRecordsTable: React.FC<InsurerSharedRecordsTableProps> = ({ walletAddress, claims, isVerified = true }) => {
   const [loading, setLoading] = useState(false);
   const [records, setRecords] = useState<SharedRecord[]>([]);
   const [selectedRecord, setSelectedRecord] = useState<SharedRecord | null>(null);
@@ -57,6 +59,13 @@ const InsurerSharedRecordsTable: React.FC<InsurerSharedRecordsTableProps> = ({ w
 
   const fetchSharedRecords = async () => {
     if (!walletAddress) return;
+    
+    // Skip fetching if not verified
+    if (!isVerified) {
+      console.log('User not verified, skipping shared records fetch');
+      setRecords([]);
+      return;
+    }
     
     try {
       setLoading(true);
@@ -78,7 +87,7 @@ const InsurerSharedRecordsTable: React.FC<InsurerSharedRecordsTableProps> = ({ w
 
   useEffect(() => {
     fetchSharedRecords();
-  }, [walletAddress]);
+  }, [walletAddress, isVerified]);
 
   const handleViewRecord = (record: SharedRecord) => {
     setSelectedRecord(record);
@@ -176,10 +185,17 @@ const InsurerSharedRecordsTable: React.FC<InsurerSharedRecordsTableProps> = ({ w
           </table>
         </div>
       ) : (
-        <div className="text-center py-8 text-gray-400">
-          <FileText size={48} className="mx-auto mb-3 opacity-50" />
-          <p>No medical records have been shared with you yet.</p>
-        </div>
+        !isVerified ? (
+          <div className="text-center justify-items-center py-8 text-gray-400">
+            <GiSkeleton size={64} className="mx-auto mb-3 opacity-50" />
+            <p>Your account is awaiting verification</p>
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-400">
+            <FileText size={48} className="mx-auto mb-3 opacity-50" />
+            <p>No medical records have been shared with you yet.</p>
+          </div>
+        )
       )}
 
       {isViewModalOpen && selectedRecord && (

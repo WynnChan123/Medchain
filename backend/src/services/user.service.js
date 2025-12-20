@@ -7,7 +7,7 @@ export const getUserById = async (userId)=> {
             select: {
                 id: true,
                 name: true,
-                email: true,
+                // email: true,
                 // role: true,
             }
         });

@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, DollarSign, FileText, Building2, AlertCircle, Upload, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { X, DollarSign, FileText, Building2, AlertCircle, Upload, Image as ImageIcon, Trash2, Check } from 'lucide-react';
 import { ethers } from 'ethers';
 import { submitClaim, getInsurers } from '@/lib/integration';
+import { print } from '../../utils/toast';
 
 interface SubmitClaimModalProps {
   isOpen: boolean;
@@ -54,6 +55,7 @@ const SubmitClaimModal: React.FC<SubmitClaimModalProps> = ({
   const [documents, setDocuments] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
 
   // Refs for file inputs
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -175,9 +177,15 @@ const SubmitClaimModal: React.FC<SubmitClaimModalProps> = ({
       await tx.wait(); // Wait for transaction confirmation
       console.log('Transaction confirmed!');
 
-      alert('Claim submitted successfully!');
-      onSuccess?.();
-      onClose();
+      setSuccess(true);
+      print('Claim submitted successfully!', 'success', ()=> {});
+      
+      setTimeout(() => {
+        onClose();
+        setSuccess(false);
+        onSuccess?.();
+      }, 2000);
+
     } catch (err: any) {
       console.error('Error submitting claim:', err);
       setError(err.message || 'Failed to submit claim. Please try again.');
@@ -212,13 +220,21 @@ const SubmitClaimModal: React.FC<SubmitClaimModalProps> = ({
 
         {/* Body */}
         <div className="p-6 space-y-6">
-          {/* Error Message */}
-          {error && (
-            <div className="bg-red-900/20 border border-red-700 rounded-lg p-4 flex items-start gap-3">
-              <AlertCircle className="text-red-400 mt-0.5" size={20} />
-              <p className="text-red-200 text-sm">{error}</p>
+          {success ? (
+            <div className="flex flex-col items-center justify-center py-20 text-green-400">
+              <Check size={64} className="mb-4" />
+              <p className="text-2xl font-semibold">Claim Submitted Successfully!</p>
+              <p className="text-gray-400 text-sm mt-2">Closing modal...</p>
             </div>
-          )}
+          ) : (
+            <>
+              {/* Error Message */}
+              {error && (
+                <div className="bg-red-900/20 border border-red-700 rounded-lg p-4 flex items-start gap-3">
+                  <AlertCircle className="text-red-400 mt-0.5" size={20} />
+                  <p className="text-red-200 text-sm">{error}</p>
+                </div>
+              )}
 
           {/* Record Info */}
           <div className="bg-gray-800 p-4 rounded-lg">
@@ -408,25 +424,36 @@ const SubmitClaimModal: React.FC<SubmitClaimModalProps> = ({
               </ul>
             </div>
           </div>
+          </>
+          )}
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-gray-900 border-t border-gray-700 p-6 flex gap-3">
-          <button
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white font-semibold py-3 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSubmitting ? 'Submitting Claim...' : 'Submit Claim'}
-          </button>
-          <button
-            onClick={onClose}
-            disabled={isSubmitting}
-            className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition disabled:opacity-50"
-          >
-            Cancel
-          </button>
-        </div>
+        {!success && (
+          <div className="sticky bottom-0 bg-gray-900 border-t border-gray-700 p-6 flex gap-3">
+            <button
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white font-semibold py-3 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {isSubmitting ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  Submitting Claim...
+                </>
+              ) : (
+                'Submit Claim'
+              )}
+            </button>
+            <button
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,9 +1,11 @@
 'use client';
 
-import { getClaimDetails, getClaimsByInsurer, approveClaim, rejectClaim, getClaimFiles } from '@/lib/integration';
+import { getClaimDetails, getClaimsByInsurer, approveClaim, rejectClaim, getClaimFiles, getRole } from '@/lib/integration';
 import { ethers } from 'ethers';
 import { Check, FileText, X, Eye } from 'lucide-react';
 import React, { useState } from 'react';
+import { GiSkeleton } from 'react-icons/gi';
+import { UserRole } from '../../../../utils/userRole';
 
 interface Claim {
   claimId: number;
@@ -33,6 +35,7 @@ const PendingClaimsPage = () => {
   const [viewFilesModal, setViewFilesModal] = useState(false);
   const [claimFiles, setClaimFiles] = useState<{photos: any[], documents: any[]}>({photos: [], documents: []});
   const [loadingFiles, setLoadingFiles] = useState(false);
+  const [isVerified, setIsVerified] = useState<boolean>(false);
 
   const fetchClaims = async () => {
     if (window.ethereum) {
@@ -41,6 +44,17 @@ const PendingClaimsPage = () => {
         const provider = new ethers.providers.Web3Provider(window.ethereum);
         const signer = provider.getSigner();
         const address = await signer.getAddress();
+        
+        // Check verification status from blockchain
+        const userRole = await getRole(address);
+        const userIsVerified = userRole === UserRole.Insurer;
+        setIsVerified(userIsVerified);
+        
+        if (!userIsVerified) {
+          console.log('User is not verified yet (no Insurer role)');
+          setLoading(false);
+          return;
+        }
         
         const claimIds = await getClaimsByInsurer(address);
         const details = await getClaimDetails(claimIds);
@@ -228,11 +242,18 @@ const PendingClaimsPage = () => {
             </table>
           </div>
         ) : (
-          <div className="text-center py-12 text-gray-400">
-            <FileText size={64} className="mx-auto mb-4 opacity-30" />
-            <p className="text-lg">No pending claims found</p>
-            <p className="text-sm mt-2">All claims have been processed</p>
-          </div>
+          isVerified ? (
+            <div className="text-center py-12 text-gray-400">
+              <FileText size={64} className="mx-auto mb-4 opacity-30" />
+              <p className="text-lg">No pending claims found</p>
+              <p className="text-sm mt-2">All claims have been processed</p>
+            </div>
+          ) : (
+            <div className="text-center justify-items-center py-12 text-gray-400">
+              <GiSkeleton size={64} className="mx-auto mb-4 opacity-50" />
+              <p className="text-lg">Your account is awaiting verification</p>
+            </div>
+          )
         )}
       </div>
 

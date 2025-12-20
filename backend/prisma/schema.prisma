@@ -9,132 +9,91 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
 model User {
-  id            String       @id @default(uuid())
-  name          String
-  email         String       @unique
-  password      String
-  createdAt     DateTime     @default(now())
-  role          String?
-  organization  Organization? @relation("OrganizationUsers",fields: [organizationId], references: [id])
-  organizationId String?     
-
-  publicKeys  PublicKey[]
-  PatientRecord PatientRecord[]
-  AccessPermissionGranted AccessPermission[] @relation("grantedTo")
+  id                        String             @id @default(uuid())
+  name                      String
+  createdAt                 DateTime           @default(now())
   AccessPermissionGrantedBy AccessPermission[] @relation("grantedBy")
+  AccessPermissionGranted   AccessPermission[] @relation("grantedTo")
+  AuditLog                  AuditLog[]
+  ConsentRequestPatient     ConsentRequest[]   @relation("ConsentRequestPatient")
+  ConsentRequestRequestedBy ConsentRequest[]   @relation("ConsentRequestRequestedBy")
+  PatientRecord             PatientRecord[]
+  publicKeys                PublicKey[]
 
-  @@index([email]) // Index for faster lookups by email
-  @@index([organizationId]) // Index for faster lookups by organization
-  ConsentRequestPatient ConsentRequest[] @relation("ConsentRequestPatient")
-  ConsentRequestRequestedBy ConsentRequest[] @relation("ConsentRequestRequestedBy")
-  AuditLog AuditLog[]
 }
 
-model PublicKey{
-  id      String    @id @default(uuid())
-  userId  String
-  publicKey String   @unique
+model PublicKey {
+  id        String @id @default(uuid())
+  userId    String
+  publicKey String @unique
+  user      User   @relation(fields: [userId], references: [id])
 
-  user  User  @relation(fields: [userId], references: [id])
   @@index([userId])
 }
 
-model Organization {
-  id        String   @id @default(uuid())
-  name      String
-  Type      String
-  createdAt DateTime @default(now())
-  address   String   @unique
-  users     User[]   @relation("OrganizationUsers")
-}
-
 model PatientRecord {
-  id          String   @id @default(uuid())
-  patientId   String  
-  patient     User     @relation(fields: [patientId], references: [id])
-  hash       String   // hash of file for integrity
-  ipfs_cid   String   // pointer to IPFS-stored record
-  createdAt   DateTime @default(now())
-
+  id               String             @id @default(uuid())
+  patientId        String
+  hash             String
+  ipfs_cid         String
+  createdAt        DateTime           @default(now())
   AccessPermission AccessPermission[]
-
-  ConsentRequest ConsentRequest[]
-
-  AuditLog AuditLog[]
+  AuditLog         AuditLog[]
+  ConsentRequest   ConsentRequest[]
+  patient          User               @relation(fields: [patientId], references: [id])
 }
 
-model AccessPermission{
-  id          String         @id @default(uuid())
+model AccessPermission {
+  id          String        @id @default(uuid())
   recordId    String
-  record      PatientRecord  @relation(fields: [recordId], references: [id])
   grantedToId String
-  grantedTo   User           @relation("grantedTo", fields: [grantedToId], references: [id])
   grantedById String
-  grantedBy   User           @relation("grantedBy", fields: [grantedById], references: [id])
   accessType  String
   expiration  DateTime
   status      String
+  grantedBy   User          @relation("grantedBy", fields: [grantedById], references: [id])
+  grantedTo   User          @relation("grantedTo", fields: [grantedToId], references: [id])
+  record      PatientRecord @relation(fields: [recordId], references: [id])
 
-  @@unique([recordId, grantedToId]) // Ensure unique permission per record and user
-
+  @@unique([recordId, grantedToId])
 }
 
 model ConsentRequest {
-  id          String   @id @default(uuid())
-  patientId   String
-  purpose      String
-  patient     User     @relation("ConsentRequestPatient", fields: [patientId], references: [id])
-  recordId    String
-  record      PatientRecord @relation(fields: [recordId], references: [id])
+  id            String        @id @default(uuid())
+  patientId     String
+  purpose       String
+  recordId      String
   requestedById String
-  requestedBy User     @relation("ConsentRequestRequestedBy", fields: [requestedById], references: [id])
-  createdAt   DateTime @default(now())
-
-  status      RequestStatus @default(PENDING)
-  requestedAt DateTime @default(now())
-  resolvedAt  DateTime?
-
-  AuditLog AuditLog[]
+  createdAt     DateTime      @default(now())
+  status        RequestStatus @default(PENDING)
+  requestedAt   DateTime      @default(now())
+  resolvedAt    DateTime?
+  AuditLog      AuditLog[]
+  patient       User          @relation("ConsentRequestPatient", fields: [patientId], references: [id])
+  record        PatientRecord @relation(fields: [recordId], references: [id])
+  requestedBy   User          @relation("ConsentRequestRequestedBy", fields: [requestedById], references: [id])
 }
 
 model AuditLog {
-  id          String   @id @default(uuid())
-  recordId    String
-  userId      String
-  accessTime  DateTime @default(now())
-  requestId   String
+  id         String         @id @default(uuid())
+  recordId   String
+  userId     String
+  accessTime DateTime       @default(now())
+  requestId  String
+  action     Action
+  record     PatientRecord  @relation(fields: [recordId], references: [id])
+  request    ConsentRequest @relation(fields: [requestId], references: [id])
+  accessedBy User           @relation(fields: [userId], references: [id])
 
-  record      PatientRecord @relation(fields: [recordId], references: [id])
-  accessedBy  User          @relation(fields: [userId], references: [id])
-  request     ConsentRequest? @relation(fields: [requestId], references: [id])
-  action      Action
-
-
-  @@index([userId]) // Index for faster lookups by user
+  @@index([userId])
 }
 
-model SmartContract{
-  id          String   @id @default(uuid())
-  name        String   
-  version     String
-  address     String
-  outcome     String
-  deployedAt   DateTime @default(now())
-  // Additional fields can be added as needed
-}
-
-
-enum OrganizationType {
-  Hospital
-  Insurer
-  Laboratory
-}
 
 enum RequestStatus {
   PENDING
@@ -142,7 +101,7 @@ enum RequestStatus {
   DENIED
 }
 
-enum Action{
+enum Action {
   VIEWED
   DOWNLOADED
 }

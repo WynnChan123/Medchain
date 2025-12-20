@@ -6,16 +6,20 @@ async function main() {
   const ROLE_UPGRADE_ADDRESS = process.env.ROLE_UPGRADE_ADDRESS;
 
   // Check if addresses are still placeholder
-  if (USER_MANAGEMENT_ADDRESS === "0x..." || ROLE_UPGRADE_ADDRESS === "0x...") {
+  const HEALTHCARE_SYSTEM_ADDRESS = process.env.SMART_CONTRACT_ADDRESS;
+
+  if (USER_MANAGEMENT_ADDRESS === "0x..." || ROLE_UPGRADE_ADDRESS === "0x..." || !HEALTHCARE_SYSTEM_ADDRESS) {
     console.error("❌ Please update the contract addresses in this script!");
     console.error("You can find them in your deployment logs or environment variables.");
     console.error("USER_MANAGEMENT_ADDRESS:", USER_MANAGEMENT_ADDRESS);
     console.error("ROLE_UPGRADE_ADDRESS:", ROLE_UPGRADE_ADDRESS);
+    console.error("HEALTHCARE_SYSTEM_ADDRESS:", HEALTHCARE_SYSTEM_ADDRESS);
     return;
   }
 
   console.log("UserManagement contract address:", USER_MANAGEMENT_ADDRESS);
   console.log("RoleUpgrade contract address:", ROLE_UPGRADE_ADDRESS);
+  console.log("HealthcareSystem contract address:", HEALTHCARE_SYSTEM_ADDRESS);
 
   // Get the deployer account (should be admin)
   const [deployer] = await ethers.getSigners();
@@ -38,29 +42,37 @@ async function main() {
 
   console.log("✅ Deployer is admin, proceeding with authorization...");
 
-  // Check if already authorized
-  const isAlreadyAuthorized = await userManagement.authorizedContracts(ROLE_UPGRADE_ADDRESS);
-  if (isAlreadyAuthorized) {
+  // 1. Authorize RoleUpgrade
+  const isRoleUpgradeAuthorized = await userManagement.authorizedContracts(ROLE_UPGRADE_ADDRESS);
+  if (isRoleUpgradeAuthorized) {
     console.log("✅ RoleUpgrade contract is already authorized!");
-    return;
+  } else {
+    console.log("🔐 Authorizing RoleUpgrade contract...");
+    const tx = await userManagement.authorizeContract(ROLE_UPGRADE_ADDRESS);
+    await tx.wait();
+    console.log("✅ RoleUpgrade authorized!");
   }
 
-  // Authorize RoleUpgrade contract
-  console.log("🔐 Authorizing RoleUpgrade contract...");
-  const tx = await userManagement.authorizeContract(ROLE_UPGRADE_ADDRESS);
-  console.log("⏳ Waiting for transaction confirmation...");
-  await tx.wait();
-
-  console.log("✅ RoleUpgrade contract authorized successfully!");
-  console.log("📄 Transaction hash:", tx.hash);
+  // 2. Authorize HealthcareSystem
+  const isHealthcareAuthorized = await userManagement.authorizedContracts(HEALTHCARE_SYSTEM_ADDRESS);
+  if (isHealthcareAuthorized) {
+    console.log("✅ HealthcareSystem contract is already authorized!");
+  } else {
+    console.log("🔐 Authorizing HealthcareSystem contract...");
+    const tx = await userManagement.authorizeContract(HEALTHCARE_SYSTEM_ADDRESS);
+    await tx.wait();
+    console.log("✅ HealthcareSystem authorized!");
+  }
 
   // Verify authorization
-  const isAuthorized = await userManagement.authorizedContracts(ROLE_UPGRADE_ADDRESS);
-  console.log("🔍 Verification - RoleUpgrade is authorized:", isAuthorized);
+  const isAuthorized1 = await userManagement.authorizedContracts(ROLE_UPGRADE_ADDRESS);
+  const isAuthorized2 = await userManagement.authorizedContracts(HEALTHCARE_SYSTEM_ADDRESS);
+  console.log("🔍 Verification - RoleUpgrade is authorized:", isAuthorized1);
+  console.log("🔍 Verification - HealthcareSystem is authorized:", isAuthorized2);
 
-  if (isAuthorized) {
+  if (isAuthorized1 && isAuthorized2) {
     console.log("🎉 SUCCESS! The authorization script worked correctly.");
-    console.log("You can now test role approvals in your frontend.");
+    console.log("You can now test role approvals and admin creation in your frontend.");
   } else {
     console.log("❌ ERROR: Authorization failed. Please check the transaction.");
   }

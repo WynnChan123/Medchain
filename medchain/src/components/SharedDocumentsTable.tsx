@@ -4,9 +4,11 @@ import { getSharedRecordsWithDetails } from '@/lib/integration';
 import { getUsernamesByWallets } from '@/lib/userUtils';
 import PatientRecordViewerModal from './PatientRecordViewerModal';
 import { ethers } from 'ethers';
+import { GiSkeleton } from 'react-icons/gi';
 
 interface SharedDocumentsTableProps {
   walletAddress: string;
+  isVerified?: boolean;
 }
 
 interface SharedRecord {
@@ -24,7 +26,7 @@ interface SharedRecord {
   sharedTimestamp?: any;
 }
 
-const SharedDocumentsTable: React.FC<SharedDocumentsTableProps> = ({ walletAddress }) => {
+const SharedDocumentsTable: React.FC<SharedDocumentsTableProps> = ({ walletAddress, isVerified = true }) => {
   const [loading, setLoading] = useState(false);
   const [records, setRecords] = useState<SharedRecord[]>([]);
   const [selectedRecord, setSelectedRecord] = useState<SharedRecord | null>(null);
@@ -57,6 +59,13 @@ const SharedDocumentsTable: React.FC<SharedDocumentsTableProps> = ({ walletAddre
   const fetchSharedRecords = async () => {
     if (!fullAddress) return;
     
+    // Skip if user is not verified
+    if (!isVerified) {
+      console.log('User not verified, skipping shared records fetch');
+      setRecords([]);
+      return;
+    }
+    
     try {
       setLoading(true);
       const fetchedRecords = await getSharedRecordsWithDetails(fullAddress);
@@ -77,7 +86,7 @@ const SharedDocumentsTable: React.FC<SharedDocumentsTableProps> = ({ walletAddre
 
   useEffect(() => {
     fetchSharedRecords();
-  }, [walletAddress]);
+  }, [walletAddress, isVerified]);
 
   const handleViewRecord = (record: SharedRecord) => {
     setSelectedRecord(record);
@@ -151,10 +160,17 @@ const SharedDocumentsTable: React.FC<SharedDocumentsTableProps> = ({ walletAddre
           </table>
         </div>
       ) : (
-        <div className="text-center py-8 text-gray-400">
-          <FileText size={48} className="mx-auto mb-3 opacity-50" />
-          <p>No documents have been shared with you yet.</p>
-        </div>
+        !isVerified ? (
+          <div className="text-center justify-items-center py-8 text-gray-400">
+            <GiSkeleton size={64} className="mx-auto mb-3 opacity-50" />
+            <p>Your account is awaiting verification</p>
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-400">
+            <FileText size={48} className="mx-auto mb-3 opacity-50" />
+            <p>No documents have been shared with you yet.</p>
+          </div>
+        )
       )}
 
       {isViewModalOpen && selectedRecord && (

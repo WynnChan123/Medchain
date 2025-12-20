@@ -239,6 +239,19 @@ export async function registerUser(
   }
 }
 
+export async function createAdmin(walletAddress: string) {
+  try {
+    const encryptedId = ethers.utils.keccak256(
+      ethers.utils.toUtf8Bytes(walletAddress)
+    );
+    // Role 4 is Admin
+    return await registerUser(walletAddress, encryptedId, 4);
+  } catch (error) {
+    console.error('Error creating admin:', error);
+    throw error;
+  }
+}
+
 export async function getRole(address: string): Promise<UserRole> {
   const contract = await readUserManagementContract();
   const roleId: number = await contract.getUserRole(address);
@@ -559,16 +572,10 @@ export async function submitRoleUpgradeRequest(
       throw new Error(`Invalid role: ${metadata.role}`);
     }
 
-    if(roleEnum === UserRole.Insurer){
-      companyName = metadata.organization;
-      doctorName = '';
-    }else if(roleEnum === UserRole.HealthcareProvider){
-      companyName = '';
-      doctorName = doctorName;
-    }else{
-      companyName = '';
-      doctorName = '';
-    }
+    // companyName and doctorName are already passed as parameters from the caller
+    // No need to overwrite them here
+    console.log('Final companyName to submit:', companyName);
+    console.log('Final doctorName to submit:', doctorName);
 
     console.log('Role enum:', roleEnum);
 
@@ -1084,10 +1091,10 @@ export async function getClaimFiles(cid: string, insurerAddress: string) {
   }
 }
 
-export async function getPendingRequestByUser(patientAddress: string) {
+export async function getPendingRequestByUser(userAddress: string) {
   try {
     const contract = await readUpgradeContract();
-    const tx = await contract.getPendingRequestByUser(patientAddress);
+    const tx = await contract.getPendingRequestByUser(userAddress);
     return tx;
   } catch (error) {
     console.log("Failed to return the user's request", error);

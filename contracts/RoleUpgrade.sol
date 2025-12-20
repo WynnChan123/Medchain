@@ -103,7 +103,7 @@ contract RoleUpgrade is Med2ChainStructs {
     }
 
     function submitUpgradeRequest(
-        address patient, 
+        address user, 
         string calldata cid, 
         userRole newRole, 
         address[] calldata admins, 
@@ -111,14 +111,14 @@ contract RoleUpgrade is Med2ChainStructs {
         string calldata companyName,
         string calldata doctorName
     ) external {
-        require(IUserManagement(userManagementContract).users(patient).walletAddress != address(0), "User not registered");
-        require(IUserManagement(userManagementContract).users(patient).isActive, "User is not active");
-        require(IUserManagement(userManagementContract).getUserRole(patient) != userRole.Admin, "Admin cannot request role upgrade");
+        // require(IUserManagement(userManagementContract).users(user).walletAddress != address(0), "User not registered");
+        // require(IUserManagement(userManagementContract).users(user).isActive, "User is not active");
+        require(IUserManagement(userManagementContract).getUserRole(user) != userRole.Admin, "Admin cannot request role upgrade");
         require(admins.length == encryptedKey.length, "Admins and encrypted keys length mismatch");
         require(bytes(cid).length > 0, "CID cannot be empty");
         //require that only one request per user is active at a time
-        for (uint i = 0; i < userToRequests[patient].length; i++) {
-            uint existingRequestId = userToRequests[patient][i];
+        for (uint i = 0; i < userToRequests[user].length; i++) {
+            uint existingRequestId = userToRequests[user][i];
             if (!requests[existingRequestId].isProcessed) {
                 revert("You have an active request pending");
             }
@@ -140,7 +140,7 @@ contract RoleUpgrade is Med2ChainStructs {
             isProcessed: false,
             isApproved: false,
             adminAddresses: admins,
-            requester: patient,
+            requester: user,
             timestamp: block.timestamp,
             cid: cid
         });
@@ -150,8 +150,8 @@ contract RoleUpgrade is Med2ChainStructs {
             adminToRequests[admins[i]].push(requestId);
         }
 
-        userToRequests[patient].push(requestId);
-        emit RoleUpgradeRequested(requestId, newRole, patient, admins, block.timestamp);
+        userToRequests[user].push(requestId);
+        emit RoleUpgradeRequested(requestId, newRole, user, admins, block.timestamp);
     }
 
     function getRequestAdminAddresses(uint _requestId) external view returns (address[] memory) {
@@ -166,7 +166,20 @@ contract RoleUpgrade is Med2ChainStructs {
         RoleUpgradeRequest storage request = requests[_requestId];
         require(request.requestId > 0 , "Request does not exist");
 
-        IUserManagement(userManagementContract).setUserRole(userToUpgrade, request.newRole);
+        // Check if user is already registered
+        if(!IUserManagement(userManagementContract).userExists(userToUpgrade)) {
+            // User not registered - register them with the new role
+            bytes32 hashedId = keccak256(abi.encodePacked(userToUpgrade, block.timestamp));
+            IUserManagement(userManagementContract).registerUserFromSystem(
+                msg.sender,  // admin approving the request
+                userToUpgrade,
+                hashedId,
+                request.newRole
+            );
+        } else {
+            // User already registered - just update their role
+            IUserManagement(userManagementContract).setUserRole(userToUpgrade, request.newRole);
+        }
 
         if(request.newRole == userRole.Admin){
             adminList.push(userToUpgrade);
@@ -267,9 +280,9 @@ contract RoleUpgrade is Med2ChainStructs {
         return adminPublicKeys[_admin];
     }
 
-    function getPendingRequestByUser(address patient) external view returns (RoleUpgradeRequest[] memory){
+    function getPendingRequestByUser(address user) external view returns (RoleUpgradeRequest[] memory){
         //count pending requests
-        uint[] memory requestIds = userToRequests[patient];
+        uint[] memory requestIds = userToRequests[user];
         uint pendingCount = 0;
 
         for(uint i=0; i< requestIds.length; i++){

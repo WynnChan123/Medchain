@@ -1,5 +1,5 @@
 import { addMedicalRecord, encryptWithPublicKey, fileToBase64, getAdminPublicKey, getAllUsers, getRole } from '@/lib/integration';
-import { X } from 'lucide-react';
+import { X, Check } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { UserRole } from '../../utils/userRole';
 import { print } from '../../utils/toast';
@@ -25,6 +25,8 @@ const PatientShareListModal: React.FC<PatientShareListModalProps> = ({
   const [patients, setPatients] = useState<string[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [recordType, setRecordType] = useState<string>('');
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // Fetch users
@@ -54,7 +56,7 @@ const PatientShareListModal: React.FC<PatientShareListModalProps> = ({
         setPatients(patientAddresses);
       } catch (error) {
         console.error('Error fetching users or roles:', error);
-        throw error;
+        setError('Failed to load patients');
       } finally {
         setLoading(false);
       }
@@ -64,6 +66,14 @@ const PatientShareListModal: React.FC<PatientShareListModalProps> = ({
   }, []);
 
 const handleShare = async() => {
+  if (!selectedPatient || !recordType.trim()) {
+    setError('Please select a patient and enter a record type');
+    return;
+  }
+
+  setError(null);
+  setLoading(true);
+
   try {
     console.log('Sharing record with patient: ', selectedPatient);
     const medicalRecordID = `REC-${Date.now()}`; 
@@ -123,10 +133,23 @@ const handleShare = async() => {
     // add medical record on chain
     await addMedicalRecord(selectedPatient, medicalRecordID, cid, encryptedKeyForPatient, recordType);
     console.log('Successfully shared record with patient: ', selectedPatient);
-    print('Record shared successfully!', 'success', () => onClose());
-  } catch(error) {
+    
+    setSuccess(true);
+    print('Record shared successfully!', 'success', () => {});
+    
+    setTimeout(() => {
+      onClose();
+      setSuccess(false);
+      setSelectedPatient('');
+      setRecordType('');
+    }, 2000);
+
+  } catch(error: any) {
     console.error('Error sharing record: ', error);
-    throw error;
+    setError(error.message || 'Failed to share record. Please try again.');
+    print(error.message || 'Failed to share record', 'error', () => {});
+  } finally {
+    setLoading(false);
   }
 }
 
@@ -142,13 +165,29 @@ const handleShare = async() => {
           </button>
         </div>
           <div className="p-6 space-y-4">
-            {loading ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mx-auto"></div>
-                <p className="text-gray-400 text-sm mt-2">Loading patients...</p>
+            {success ? (
+              <div className="flex flex-col items-center justify-center py-10 text-green-400">
+                <Check size={48} className="mb-4" />
+                <p className="text-lg font-semibold">Record Shared Successfully!</p>
               </div>
             ) : (
               <>
+                {error && (
+                  <div className="bg-red-900/50 border border-red-700 text-red-200 p-4 rounded-lg flex items-start gap-3 mb-4">
+                    <X size={20} className="mt-0.5 flex-shrink-0" />
+                    <p className="text-sm">{error}</p>
+                  </div>
+                )}
+
+                {loading ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mx-auto"></div>
+                    <p className="text-gray-400 text-sm mt-2">
+                      {patients.length === 0 ? 'Loading patients...' : 'Sharing record...'}
+                    </p>
+                  </div>
+                ) : (
+                  <>
                 <label className="text-white mb-2 block">
                   Select Patient to Share:
                 </label>
@@ -168,6 +207,7 @@ const handleShare = async() => {
                           onChange={(e) => {
                             const { checked, value } = e.target;
                             setSelectedPatient(checked ? value : '');
+                            setError(null);
                           }}
                         />
                         {patientAddr.slice(0, 6)}...{patientAddr.slice(-4)}
@@ -185,18 +225,29 @@ const handleShare = async() => {
                     placeholder="e.g., Lab Report, Prescription"
                   />
                 </div>
+                </>
+                )}
               </>
             )}
           </div>
-          <div className="p-6 flex gap-4 justify-end pt-4">
-            <button
-              onClick={handleShare}
-              disabled={!selectedPatient || recordType.trim() === ''}
-              className="w-fit px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Share →
-            </button>
-          </div>
+          {!success && (
+            <div className="p-6 flex gap-4 justify-end pt-4">
+              <button
+                onClick={handleShare}
+                disabled={loading || !selectedPatient || recordType.trim() === ''}
+                className="w-fit px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Sharing...
+                  </>
+                ) : (
+                  'Share →'
+                )}
+              </button>
+            </div>
+          )}
       </div>
     </div>
   );

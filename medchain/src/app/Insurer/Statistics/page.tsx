@@ -3,7 +3,9 @@
 import { BarChart3, DollarSign, TrendingUp } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { ethers } from 'ethers';
-import { getInsurerStatistics } from '@/lib/integration';
+import { getInsurerStatistics, getRole } from '@/lib/integration';
+import { GiSkeleton } from 'react-icons/gi';
+import { UserRole } from '../../../../utils/userRole';
 
 const StatisticsPage = () => {
   const [stats, setStats] = useState({
@@ -15,6 +17,7 @@ const StatisticsPage = () => {
     totalApprovedAmount: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [isVerified, setIsVerified] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -23,6 +26,17 @@ const StatisticsPage = () => {
           const provider = new ethers.providers.Web3Provider(window.ethereum);
           const signer = provider.getSigner();
           const address = await signer.getAddress();
+
+          // Check verification status from blockchain
+          const userRole = await getRole(address);
+          const userIsVerified = userRole === UserRole.Insurer;
+          setIsVerified(userIsVerified);
+          
+          if (!userIsVerified) {
+            console.log('User is not verified yet (no Insurer role)');
+            setLoading(false);
+            return;
+          }
 
           const statistics = await getInsurerStatistics(address);
           
@@ -51,6 +65,20 @@ const StatisticsPage = () => {
 
   if (loading) {
     return <div className="text-white text-center py-12">Loading statistics...</div>;
+  }
+  
+  if (!isVerified) {
+    return (
+      <div className="space-y-6">
+        <h2 className="text-white text-2xl font-semibold">Statistics Overview</h2>
+        <div className="bg-gray-900 rounded-lg p-12 border border-gray-700">
+          <div className="text-center justify-items-center text-gray-400">
+            <GiSkeleton size={64} className="mx-auto mb-4 opacity-50" />
+            <p className="text-lg">Your account is awaiting verification</p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

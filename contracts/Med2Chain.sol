@@ -58,6 +58,13 @@ interface IUserManagement {
     function getUserRole(address user) external view returns (Med2ChainStructs.userRole);
     function users(address user) external view returns (Med2ChainStructs.User memory);
     function setUserRole(address user, Med2ChainStructs.userRole) external;
+    function userExists(address user) external view returns (bool);
+    function registerUserFromSystem(
+        address sender,
+        address walletAddress,
+        bytes32 encryptedId,
+        Med2ChainStructs.userRole role
+    ) external;
 }
 
 interface IMedicalRecords {
