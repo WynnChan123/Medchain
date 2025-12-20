@@ -12,6 +12,7 @@ import useStore from '@/store/userStore';
 import { generateAndRegisterUserKey, getUserPublicKey } from '@/lib/userKeys'; // Unified imports only
 import { verifyRSAKeyPair } from '@/lib/integration'; // Address-aware verify
 import { cleanupLegacyKeys } from '@/lib/keyStorage'; // For one-time cleanup
+import CreateAdminModal from '@/components/CreateAdminModal';
 
 interface RoleUpgradeRequest {
   requestId: BigNumber;
@@ -46,7 +47,7 @@ const Dashboard = () => {
   // Document Viewer Modal State
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<RoleUpgradeRequest | null>(null);
-  
+  const [createAdminModalOpen, setCreateAdminModalOpen] = useState(false);
   // User Details Modal State
   const [userDetailsModalOpen, setUserDetailsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -194,6 +195,14 @@ const Dashboard = () => {
       setLoading(false);
     }
   };
+
+  const handleOpenModal = async() => {
+    try{
+      setCreateAdminModalOpen(true);
+    }catch (error){
+      console.error(error);
+    }
+  }
 
 
   const handleViewDocuments = (request: RoleUpgradeRequest) => {
@@ -506,6 +515,14 @@ const Dashboard = () => {
             <Users className="text-blue-400" size={24} />
             <h3 className="text-white text-lg font-semibold">User Management</h3>
           </div>
+          <div className="flex justify-end">
+            <button 
+              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition"
+              onClick={() => handleOpenModal()}
+            >
+              + Assign Admin
+            </button>
+          </div>
         </div>
 
         {/* Search and Filter */}
@@ -600,6 +617,13 @@ const Dashboard = () => {
           userAddress={selectedUser.walletAddress}
           currentRole={selectedUser.currentRole}
           adminAddress={walletAddress}
+        />
+      )}
+
+      {createAdminModalOpen && (
+        <CreateAdminModal 
+          isOpen={createAdminModalOpen}
+          onClose={()=> setCreateAdminModalOpen(false)}
         />
       )}
     </div>

@@ -239,6 +239,19 @@ export async function registerUser(
   }
 }
 
+export async function createAdmin(walletAddress: string) {
+  try {
+    const encryptedId = ethers.utils.keccak256(
+      ethers.utils.toUtf8Bytes(walletAddress)
+    );
+    // Role 4 is Admin
+    return await registerUser(walletAddress, encryptedId, 4);
+  } catch (error) {
+    console.error('Error creating admin:', error);
+    throw error;
+  }
+}
+
 export async function getRole(address: string): Promise<UserRole> {
   const contract = await readUserManagementContract();
   const roleId: number = await contract.getUserRole(address);

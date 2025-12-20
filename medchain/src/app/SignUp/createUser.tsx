@@ -124,7 +124,6 @@ export default function CreateUser() {
         throw new Error(data.message || 'Signed up failed');
       }
 
-      print('Backend Account Created!', 'success', () => {});
       return true;
     } catch (error) {
       console.error('Sign up error:', error);
@@ -228,10 +227,8 @@ export default function CreateUser() {
           return;
         }
       }
-
-      // All validations passed, now create backend account
-      const signUpSuccess = await handleSignUp();
-      if (!signUpSuccess) return;
+          const signUpSuccess = await handleSignUp();
+          if (!signUpSuccess) return;
 
       // Proceed with blockchain registration
       const role = await getRole(address);
@@ -349,7 +346,7 @@ export default function CreateUser() {
             {steps.map((step, index) => (
               <div
                 key={step.number}
-                className={`flex-1 flex items-center justify-center px-4 py-3 rounded-xl transition-all duration-300 cursor-pointer ${
+                className={`flex-0 flex items-center justify-center px-4 py-3 rounded-xl transition-all duration-300 cursor-pointer ${
                   currentStep === step.number
                     ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow-lg shadow-blue-500/30'
                     : 'text-gray-400 hover:bg-gray-600'
@@ -387,7 +384,7 @@ export default function CreateUser() {
               }`}
             >
               <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold text-white mb-3">
+                <h2 className="text-3xl font-bold text-white mb-3 pt-5">
                   Welcome To MedChain
                 </h2>
                 <p className="text-gray-400">
@@ -423,7 +420,7 @@ export default function CreateUser() {
               }`}
             >
               <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold text-white mb-3">
+                <h2 className="text-3xl font-bold text-white mb-3 pt-5">
                   Select Your Role
                 </h2>
                 <p className="text-gray-400">
@@ -490,8 +487,8 @@ export default function CreateUser() {
                     : '-translate-x-full opacity-0'
                 }`}
               >
-                <div className="text-center mb-8">
-                  <h2 className="text-3xl font-bold text-white mb-3">
+                <div className="text-center mb-8"> 
+                  <h2 className="text-3xl font-bold text-white mb-3 pt-5">
                     Share Your Info
                   </h2>
                   <p className="text-gray-400">

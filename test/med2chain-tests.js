@@ -82,6 +82,11 @@ describe('Healthcare System Contracts', function () {
     await userManagement
       .connect(admin)
       .authorizeContract(await roleUpgrade.getAddress());
+
+    // Authorize HealthcareSystem contract (needed for registerUser wrapper)
+    await userManagement
+      .connect(admin)
+      .authorizeContract(await healthcareSystem.getAddress());
   });
 
   describe('UserManagement', function () {
@@ -200,6 +205,29 @@ describe('Healthcare System Contracts', function () {
       expect(patientAddresses).to.include(await patient.getAddress());
       expect(patientAddresses).to.include(await patient2.getAddress());
       expect(patientAddresses).to.not.include(await admin.getAddress());
+    });
+
+    it('Should allow admin to create another admin', async function () {
+      const newAdmin = doctor; 
+      const encryptedId = ethers.keccak256(ethers.toUtf8Bytes('newAdmin'));
+      
+      await healthcareSystem
+        .connect(admin)
+        .registerUser(await newAdmin.getAddress(), encryptedId, 4);
+
+      const role = await userManagement.getUserRole(await newAdmin.getAddress());
+      expect(role).to.equal(4);
+    });
+
+    it('Should prevent non-admin from creating admin', async function () {
+      const newAdmin = doctor;
+      const encryptedId = ethers.keccak256(ethers.toUtf8Bytes('newAdmin'));
+      
+      await expect(
+        healthcareSystem
+          .connect(patient)
+          .registerUser(await newAdmin.getAddress(), encryptedId, 4)
+      ).to.be.revertedWith('Only admin can register other roles');
     });
   });
 

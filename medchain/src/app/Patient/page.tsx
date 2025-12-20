@@ -48,9 +48,7 @@ interface SharedRecord {
 }
 
 const PatientDashboard = () => {
-  const [selectedRole, setSelectedRole] = useState('');
   const [walletAddress, setWalletAddress] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const role = useStore((state) => state.role);
   const [secondRole, setSecondRole] = useState('');
   const [selectedRecord, setSelectedRecord] = useState<medicalDocuments | null>(
@@ -336,17 +334,6 @@ useEffect(() => {
         <p className="text-blue-200 text-sm sm:text-base mb-4">
           Current Role: {secondRole == '' ? role : secondRole}
         </p>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-          <p className="text-blue-100 text-xs sm:text-sm">
-            Want to become a Healthcare Provider or Insurer?
-          </p>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="w-full sm:w-auto px-4 py-2 bg-white text-blue-900 rounded-lg font-medium hover:bg-blue-50 transition flex items-center justify-center gap-2 text-sm"
-          >
-            Request Role Upgrade →
-          </button>
-        </div>
       </div>
 
       {/* Quick Actions - Responsive Grid */}
@@ -596,23 +583,6 @@ useEffect(() => {
 
       {/* Shared Documents Table */}
       <SharedDocumentsTable walletAddress={walletAddress} />
-
-      {/* Role Upgrade Modal */}
-      {isModalOpen && (
-        <RoleUpgradeModal
-          isOpen={isModalOpen}
-          onClose={() => {
-            setIsModalOpen(false);
-            setSelectedRole('');
-          }}
-          // onSubmit={() => {
-          //   setShowPendingBanner(true);
-          //   setIsModalOpen(false);
-          // }}
-          selectedRole={selectedRole}
-          setSelectedRole={setSelectedRole}
-        />
-      )}
 
       {viewDocumentModal && (
         <PatientRecordViewerModal

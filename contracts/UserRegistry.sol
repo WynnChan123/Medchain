@@ -65,6 +65,11 @@ contract UserManagement is Med2ChainStructs {
         }
         else{
             // Admin registering user with non-Patient role
+            bool isCallerAdmin = userRoles[msg.sender][userRole.Admin];
+            bool isContractAuthorized = authorizedContracts[msg.sender];
+            bool isSenderAdmin = userRoles[sender][userRole.Admin];
+
+            require(isCallerAdmin || (isContractAuthorized && isSenderAdmin), "Only admin can register other roles");
             users[walletAddress] = User({
                 createdAt: block.timestamp,
                 encryptedId: encryptedId,
