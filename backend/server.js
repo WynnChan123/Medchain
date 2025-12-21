@@ -12,9 +12,9 @@ const app = express();
 const prisma = new PrismaClient(); // Initialize PrismaClient
 
 const corsOptions = {
-  origin: '*',
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  credentials: true
+  origin: ['http://localhost:3000', 'https://medchain2u.vercel.app'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
 };
 
 app.use(cors(corsOptions));
