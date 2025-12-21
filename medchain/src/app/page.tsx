@@ -24,9 +24,7 @@ export default function Login() {
   const setRole = useStore((state) => state.setRole);
   const [name, setName] = useState<string>('');
 
-  useEffect(() => {
-    console.log('Public Key: ', publicKey);
-  }, [publicKey]);
+
 
   const handleLogin = async () => {
     // Clear previous error messages
@@ -104,10 +102,7 @@ export default function Login() {
 
         try {
           const roleId = await getRole(signerAddress);
-          console.log('Signer address:', signerAddress);
-          console.log('Public key (from backend or UI):', publicKey);
           const alreadyExists = await userExists(signerAddress);
-          console.log('User already exists on blockchain?', alreadyExists);
           if (roleId === UserRole.Unregistered) {
             const pendingRequest = await getPendingRequestByUser(signerAddress);
 
@@ -126,7 +121,6 @@ export default function Login() {
           } else {
             // User already exists, redirect based on existing role
             const roleName = UserRole[roleId] as keyof typeof UserRole;
-            console.log('Existing role from enum:', roleName);
             setRole(roleName);
 
             if (roleId === UserRole.Admin) {
@@ -149,7 +143,6 @@ export default function Login() {
         }
       } else {
         setErrorMessage('Login failed: ' + (data.message || data.error || 'Unknown error'));
-        console.log('Login failed: ', data);
       }
     } catch (error: any) {
       console.error('Error during login:', error);

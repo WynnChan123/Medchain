@@ -30,7 +30,6 @@ const PatientLayout = ({children}: {children: React.ReactNode}) => {
             }
           })
           .catch((err) => {
-            console.log(err);
           });
       }
     }, []);

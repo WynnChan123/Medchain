@@ -112,7 +112,6 @@ export async function deletePrivateKey(keyId: string, address: string): Promise<
     const request = store.delete(prefixedId);
 
     request.onsuccess = () => {
-      console.log(`Deleted key: ${prefixedId}`);
       resolve();
     };
     request.onerror = () => reject(request.error);
@@ -136,7 +135,6 @@ export async function cleanupLegacyKeys(address: string): Promise<void> {
       ];
       
       Promise.allSettled(legacyRequests).then(() => {
-        console.log('🧹 Cleaned up legacy keys');
         resolve();
       }).catch(reject);
     });

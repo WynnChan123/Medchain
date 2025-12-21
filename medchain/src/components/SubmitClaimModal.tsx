@@ -172,11 +172,7 @@ const SubmitClaimModal: React.FC<SubmitClaimModalProps> = ({
         description,
         { photos, documents } // Pass files object
       );
-
-      console.log('Transaction submitted:', tx.hash);
       await tx.wait(); // Wait for transaction confirmation
-      console.log('Transaction confirmed!');
-
       setSuccess(true);
       print('Claim submitted successfully!', 'success', ()=> {});
       

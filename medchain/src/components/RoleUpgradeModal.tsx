@@ -51,10 +51,8 @@ const RoleUpgradeModal: React.FC<RoleUpgradeModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      console.log('Modal opened, fetching admins...');
       getAdmins()
         .then((adminList) => {
-          console.log('Fetched admins:', adminList);
           setAdmins(adminList);
         })
         .catch((err) => console.error('Failed to fetch admins', err));
@@ -66,7 +64,6 @@ const RoleUpgradeModal: React.FC<RoleUpgradeModalProps> = ({
     const fetchAdmins = async () => {
       try {
         const admins = await getAdmins();
-        console.log('Admins from contract:', admins);
       } catch (error) {
         console.error('Error fetching admins:', error);
       }
@@ -131,20 +128,11 @@ const RoleUpgradeModal: React.FC<RoleUpgradeModalProps> = ({
         print("Please enter the doctor's name", 'warning', () => {});
         return;
       }
-
-      console.log('No error so far');
-      console.log('Selected role:', selectedRole);
-      console.log('Selected admins:', selectedAdmin);
-      console.log('Doctor name:', doctorName);
-      console.log('Organization:', organization);
-
       // Fetch admin public keys with error handling
       const adminPublicKeys = await Promise.all(
         selectedAdmin.map(async (addr, index) => {
           try {
             const publicKey = await getAdminPublicKey(addr);
-            console.log(`Admin ${index} (${addr}):`, publicKey);
-
             if (!publicKey || publicKey === '' || publicKey === '0x') {
               throw new Error(
                 `Admin ${addr} has no public key set. Please ask the admin to generate and register their keys first.`
@@ -162,9 +150,6 @@ const RoleUpgradeModal: React.FC<RoleUpgradeModalProps> = ({
           }
         })
       );
-
-      console.log('All admin public keys:', adminPublicKeys);
-
       // Verify all keys are valid
       const invalidKeys = adminPublicKeys.filter(
         (key) => !key || key === '' || key === '0x'
@@ -190,11 +175,6 @@ const RoleUpgradeModal: React.FC<RoleUpgradeModalProps> = ({
         companyName = '';
         finalDoctorName = '';
       }
-
-      console.log('Final companyName to pass:', companyName);
-      console.log('Final doctorName to pass:', finalDoctorName);
-      console.log('Organization (for metadata):', organization);
-
       await submitRoleUpgradeRequest(
         address,
         { id: files.id, license: files.license, proof: files.proof },
@@ -238,7 +218,6 @@ const RoleUpgradeModal: React.FC<RoleUpgradeModalProps> = ({
       }
 
       print(errorMessage, 'error', () => {});
-      console.log('Error message:', errorMessage);
     }
   };
 

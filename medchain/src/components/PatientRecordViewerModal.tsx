@@ -71,27 +71,18 @@ useEffect(() => {
       
       // If the user is a Healthcare Provider or Admin, use the shared record decryption
       if (role === 'HealthcareProvider' || role === 'Admin' || role === 'Insurer') {
-        console.log('🏥 Decrypting as shared record (Doctor/Admin)...');
-        console.log('Patient address:', patientAddress);
-        console.log('Record ID:', recordId);
-        console.log('Doctor address:', userAddress);
-        
         // This function does everything: gets key, decrypts key, fetches doc, decrypts doc
         decryptedRecord = await fetchAndDecryptSharedRecord(
           patientAddress,
           recordId,
           userAddress
         );
-        
-        console.log('✅ Shared record decrypted successfully');
       } else {
         // Patient viewing their own record
-        console.log('👤 Decrypting as patient record...');
         decryptedRecord = await fetchAndDecryptPatientRecord(
           userAddress,
           recordId
         );
-        console.log('✅ Patient record decrypted successfully');
       }
 
       setDocument(decryptedRecord);

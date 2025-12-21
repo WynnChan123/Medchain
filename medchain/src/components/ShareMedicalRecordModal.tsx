@@ -56,7 +56,6 @@ const ShareMedicalRecordModal = ({ isOpen, onClose, selectedUser, setSelectedPat
       const provider = new ethers.providers.Web3Provider(window.ethereum);
       const signer = provider.getSigner();
       const userAddress = await signer.getAddress();   
-      console.log(userAddress); 
       setUserAddress(userAddress);
     }
 
@@ -73,7 +72,6 @@ const ShareMedicalRecordModal = ({ isOpen, onClose, selectedUser, setSelectedPat
       try{
         if(activeTab === 'patients' && patients.length === 0){
           const patientAddresses = await getAllPatientAddresses();
-          console.log('Fetched patient addresses: ', patientAddresses);
           // Filter out current user - patientAddresses is string[]
           const filteredPatients = patientAddresses.filter(
             (addr: string) => addr.toLowerCase() !== userAddress.toLowerCase()
@@ -81,13 +79,11 @@ const ShareMedicalRecordModal = ({ isOpen, onClose, selectedUser, setSelectedPat
           setPatients(filteredPatients);
         }else if(activeTab === 'doctors' && doctors.length === 0){
           const result = await getProviders();
-          console.log('Fetched doctors result: ', result);
           const formattedDoctors = result
             .filter((doc: UserData) => doc.address.toLowerCase() !== userAddress.toLowerCase());
           setDoctors(formattedDoctors);
         }else if(activeTab === 'insurers' && insurers.length === 0){
           const result = await getInsurers();
-          console.log('Fetched insurers result: ', result);
           const formattedInsurers = result
             .filter((ins: UserData) => ins.address.toLowerCase() !== userAddress.toLowerCase());
           setInsurers(formattedInsurers);
@@ -132,14 +128,8 @@ const ShareMedicalRecordModal = ({ isOpen, onClose, selectedUser, setSelectedPat
       if (!encryptedKeyForRecipient || encryptedKeyForRecipient === '0x' || encryptedKeyForRecipient.length <= 2) {
         throw new Error("Failed to generate a valid encrypted key for the recipient. Please try again.");
       }
-
-      console.log('GOT USER ADDRESS: ', userAddress);
       await grantAccess(userAddress, selectedUser, record.recordId);
-      console.log('Granted Access Successfully');
-
       await storeEncryptedAESKey(userAddress, selectedUser, record.recordId, encryptedKeyForRecipient);
-      console.log('Stored encrypted key successfully');
-
       setSuccess(true);
       if (onSuccess) {
         onSuccess();

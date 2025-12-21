@@ -42,7 +42,6 @@ const ApprovedClaimsPage = () => {
           setIsVerified(userIsVerified);
           
           if (!userIsVerified) {
-            console.log('User is not verified yet (no Insurer role)');
             setLoading(false);
             return;
           }

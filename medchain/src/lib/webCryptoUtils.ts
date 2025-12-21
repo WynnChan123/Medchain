@@ -88,12 +88,7 @@ export async function decryptAESKeyWithPrivateKey(
 ): Promise<string> {
 // 1. Convert encrypted hex to ArrayBuffer
   const cleanHex = encryptedKeyHex.replace(/^0x/, '');
-  console.log('🔍 Decrypt Debug - Clean Hex:', cleanHex);
-  console.log('🔍 Decrypt Debug - Hex Length:', cleanHex.length);
   const encryptedBuffer = hexToArrayBuffer(cleanHex);
-  console.log('🔍 Decrypt Debug - Buffer Length (bytes):', encryptedBuffer.byteLength);
-  console.log('🔍 Decrypt Debug - Private Key Algo:', privateKey.algorithm);
-  
   // Validate expected length for RSA-2048 OAEP (should be exactly 256 bytes)
   if (encryptedBuffer.byteLength !== 256) {
     throw new Error(`Invalid ciphertext length: ${encryptedBuffer.byteLength} bytes (expected 256 for RSA-2048)`);

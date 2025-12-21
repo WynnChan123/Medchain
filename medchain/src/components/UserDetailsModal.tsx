@@ -65,7 +65,6 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
             userFound = true;
           }
         } catch (err) {
-          console.log('Direct wallet lookup failed, trying all users...');
         }
 
         // If not found by direct lookup, fetch all users and match
@@ -94,7 +93,6 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
               }
             }
           } catch (err) {
-            console.log('Error fetching all users:', err);
           }
         }
       }

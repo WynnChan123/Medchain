@@ -70,7 +70,6 @@ export default function CreateUser() {
     const fetchAdmins = async () => {
       try {
         const adminList = await getAdmins();
-        console.log('Fetched admins:', adminList);
         setAdmins(adminList);
       } catch (error) {
         console.error('Failed to fetch admins', error);
@@ -141,7 +140,6 @@ export default function CreateUser() {
       setErrorMessage('Please connect wallet');
       return;
     } else {
-      console.log('Public key: ', publicKey);
       setErrorMessage('');
     }
   }, [publicKey]);
@@ -239,7 +237,6 @@ export default function CreateUser() {
         );
 
         const alreadyExists = await userExists(address);
-        console.log('User already exists on blockchain?', alreadyExists);
 
         if (alreadyExists) {
           throw new Error(
@@ -252,7 +249,6 @@ export default function CreateUser() {
             ethers.utils.toUtf8Bytes(address)
           );
           await registerUser(address, encryptedId, 1);
-          console.log('User is registered as a normal patient');
           print('Blockchain Registration Successful!', 'success', () =>
             router.push('/')
           );
@@ -319,7 +315,6 @@ export default function CreateUser() {
             finalDoctorName
           );
 
-          console.log(`User request sent for ${selectedRole}`);
           print('Registration Request Sent to Admins!', 'success', () =>
             router.push('/')
           );

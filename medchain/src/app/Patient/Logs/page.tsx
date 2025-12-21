@@ -49,8 +49,6 @@ export default function PatientAccessLogs() {
 
         // Use the backend proxy instead of direct Etherscan API
         const fetchedAbi = await fetchAbiFromEtherscan(ACCESS_CONTROL_ADDRESS);
-        console.log('Fetched ABI:', fetchedAbi);
-        console.log('ABI fetched successfully from backend');
         setABI(fetchedAbi);
       } catch (err: any) {
         console.error('ABI fetch error:', err);

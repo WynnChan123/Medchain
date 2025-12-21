@@ -63,8 +63,6 @@ const Dashboard = () => {
       setWalletAddress(address);
 
       const userRole = await getRole(address);
-      console.log('User role:', UserRole[userRole]);
-
       // NEW: Unified key check and generation for Admin (no old imports/fallbacks)
       if (userRole === UserRole.Admin) {
         // Check if we've already verified keys this session
@@ -72,23 +70,11 @@ const Dashboard = () => {
         
         // Cleanup legacy keys first (one-time)
         await cleanupLegacyKeys(address);
-        console.log('🧹 Cleaned up legacy keys for admin', address);
-        
         const { hasPrivateKey } = await import('@/lib/keyStorage');
         const hasLocalKey = await hasPrivateKey('userPrivateKey', address); // Address-aware
         let onChainPublicKey = await getUserPublicKey(address); // Unified fetch
-
-        console.log('🔑 Fetched on-chain public key:', onChainPublicKey ? 'Present' : 'Missing');
-        console.log('🔑 Has local private key (userPrivateKey):', hasLocalKey);
-
         if (!hasLocalKey || !onChainPublicKey) {
-          console.log('Missing keys - regenerating...');
-          console.log('Has local private key:', hasLocalKey);
-          console.log('Has on-chain public key:', !!onChainPublicKey);
-          
           await generateAndRegisterUserKey(address); // Unified gen (waits for tx)
-          console.log('✅ New user keypair generated and registered.');
-          
           // Re-fetch post-gen to confirm
           onChainPublicKey = await getUserPublicKey(address);
           if (!onChainPublicKey) {
@@ -102,12 +88,8 @@ const Dashboard = () => {
           sessionStorage.setItem(`keyVerified_${address}`, 'true');
         } else if (!sessionKeyVerified) {
           // Only verify if we haven't verified this session
-          console.log('✅ Both keys found. Verifying match...');
-          
           // Always verify (address-aware)
           const isValid = await verifyRSAKeyPair(onChainPublicKey); // Pass address
-          console.log('Keypair verification result:', isValid);
-          
           if (!isValid) {
             console.error("❌ RSA keypair verification failed. Keys mismatch.");
             
@@ -118,15 +100,12 @@ const Dashboard = () => {
                 "Key mismatch detected!\n\nLocal private key doesn't match on-chain public key.\n\nRegenerating will lock existing access FOREVER.\n\nContinue and regenerate? (Refresh/reconnect wallet to retry.)"
               );
               if (!userChoice) {
-                console.log("❌ User aborted regeneration. Proceeding anyway.");
                 setHasPublicKey(true);
                 sessionStorage.setItem(`keyVerified_${address}`, 'true');
                 await fetchRequests(address); // Proceed to fetch
                 return;
               }
             }
-            
-            console.log("⚠️ Auto-regenerating keys (Old data will be lost)");
             await generateAndRegisterUserKey(address);
             onChainPublicKey = await getUserPublicKey(address);
             localStorage.setItem('userPublicKey', onChainPublicKey || ''); // Unified LS
@@ -134,7 +113,6 @@ const Dashboard = () => {
             sessionStorage.setItem(`keyVerified_${address}`, 'true');
             alert("Your keys were mismatched and have been automatically regenerated. Old encrypted data is no longer accessible.");
           } else {
-            console.log('✅ Keypair verified successfully.');
             // Sync localStorage
             localStorage.setItem('userPublicKey', onChainPublicKey);
             setHasPublicKey(true);
@@ -142,7 +120,6 @@ const Dashboard = () => {
           }
         } else {
           // Already verified this session, skip verification
-          console.log('✅ Keys already verified this session. Skipping verification.');
           setHasPublicKey(true);
         }
       }
@@ -151,7 +128,6 @@ const Dashboard = () => {
       await fetchRequests(address);
 
       // Fetch users (unchanged)
-      console.log('Fetching users for admin dashboard...');
       const allUsers = await getAllUsers();
 
       const usersWithRoles: User[] = await Promise.all(allUsers.map(async (user: User) => {
@@ -165,9 +141,7 @@ const Dashboard = () => {
       setUsers(usersWithRoles);
       if (allUsers[0]) {
         await getRole(allUsers[0].walletAddress);
-        console.log('First user role check:', await getRole(allUsers[0].walletAddress));
       }
-      console.log('Fetched all users for admin dashboard', allUsers);
     };
 
     init();
@@ -212,7 +186,6 @@ const Dashboard = () => {
 
   const handleApprove = async (requestId: number, userAddress: string) => {
     try {
-      console.log('Approving request:', requestId, userAddress);
       // Fetch documents to get the role name (Company Name or Doctor Name)
       let roleName = '';
       
@@ -232,22 +205,11 @@ const Dashboard = () => {
           const metadata = documents[0].metadata;
           
           // Log the entire metadata for debugging
-          console.log('=== METADATA DEBUG ===');
-          console.log('Full metadata object:', JSON.stringify(metadata, null, 2));
-          console.log('metadata.doctorName:', metadata.doctorName);
-          console.log('metadata.organization:', metadata.organization);
-          console.log('metadata.role:', metadata.role);
-          console.log('======================');
-          
           if (request.newRole === UserRole.Insurer) {
             roleName = metadata.organization;
-            console.log('Insurer - Using organization:', roleName);
           } else if (request.newRole === UserRole.HealthcareProvider) {
             // Try doctorName first, fallback to organization if not found
             roleName = metadata.doctorName || metadata.organization || '';
-            console.log('Healthcare Provider - doctorName:', metadata.doctorName);
-            console.log('Healthcare Provider - organization:', metadata.organization);
-            console.log('Healthcare Provider - Final roleName:', roleName);
           }
           
           if (!roleName) {
@@ -276,7 +238,6 @@ const Dashboard = () => {
 
   const handleReject = async (requestId: number) => {
     try {
-      console.log('Rejecting request:', requestId);
       await rejectRequest(requestId);
       
       // Show success message

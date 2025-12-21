@@ -51,9 +51,6 @@ const OrganizationPage = () => {
           req.isApproved === true && 
           (req.newRole === UserRole.HealthcareProvider || req.newRole === UserRole.Insurer)
       );
-
-      console.log('Approved healthcare/insurer requests:', approvedRequests);
-
       // Fetch documents to get organization names
       const orgsWithDetails = await Promise.all(
         approvedRequests.map(async (request: any) => {

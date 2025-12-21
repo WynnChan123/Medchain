@@ -30,7 +30,6 @@ const InsurerLayout = ({children}: {children: React.ReactNode}) => {
             }
           })
           .catch((err) => {
-            console.log(err);
           });
       }
     }, []);

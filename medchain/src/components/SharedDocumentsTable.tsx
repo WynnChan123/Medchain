@@ -46,7 +46,6 @@ const SharedDocumentsTable: React.FC<SharedDocumentsTableProps> = ({ walletAddre
         const provider = new ethers.providers.Web3Provider(window.ethereum);
         const signer = provider.getSigner();
         const address = await signer.getAddress();
-        console.log('✅ Full wallet address:', address);
         setFullAddress(address);
       } catch (error) {
         console.error('❌ Error getting wallet address:', error);
@@ -61,7 +60,6 @@ const SharedDocumentsTable: React.FC<SharedDocumentsTableProps> = ({ walletAddre
     
     // Skip if user is not verified
     if (!isVerified) {
-      console.log('User not verified, skipping shared records fetch');
       setRecords([]);
       return;
     }

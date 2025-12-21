@@ -78,8 +78,6 @@ const TopBar = ({userName, onMenuClick, isSidebarOpen = false}: TopBarProps)=>{
         const signer = provider.getSigner();
         const userAddress = await signer.getAddress();
         const userRole = await getRole(userAddress);
-        console.log('My ROLE: ', userRole);
-
         // Check verification status based on role
         if (userRole === UserRole.HealthcareProvider || userRole === UserRole.Insurer) {
           setIsVerified(true);

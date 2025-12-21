@@ -67,15 +67,11 @@ useEffect(() => {
       const signer = provider.getSigner();
       const userAddress = await signer.getAddress();
       const userRole = await getRole(userAddress);
-
-      console.log('User role:', userRole);
-
       // Check if user is verified (has HealthcareProvider role)
       const userIsVerified = userRole === UserRole.HealthcareProvider;
       setIsVerified(userIsVerified); // Set verification state
 
       if (!userIsVerified) {
-        console.log('User is not verified yet (no HealthcareProvider role)');
         // Don't return - let them see the dashboard with skeleton icons
         // Skip all the key generation and record fetching
         return;
@@ -88,18 +84,8 @@ useEffect(() => {
       const { hasPrivateKey } = await import('@/lib/keyStorage');
       const hasLocalKey = await hasPrivateKey('userPrivateKey', userAddress); // Unified ID
       let onChainPublicKey = await getUserPublicKey(userAddress); // Unified fetch
-
-      console.log('🔑 Fetched on-chain public key:', onChainPublicKey ? 'Present' : 'Missing');
-      console.log('🔑 Has local private key (userPrivateKey):', hasLocalKey);
-
       if (!hasLocalKey || !onChainPublicKey) {
-        console.log('Missing keys - regenerating...');
-        console.log('Has local private key:', hasLocalKey);
-        console.log('Has on-chain public key:', !!onChainPublicKey);
-        
         await generateAndRegisterUserKey(userAddress); // Unified gen (waits for tx)
-        console.log('✅ New user keypair generated and registered.');
-        
         // Re-fetch post-gen to confirm
         onChainPublicKey = await getUserPublicKey(userAddress);
         if (!onChainPublicKey) {
@@ -110,12 +96,8 @@ useEffect(() => {
         }
         setHasPublicKey(true);
       } else {
-        console.log('✅ Both keys found. Verifying match...');
-        
         // Always verify (no localStorage skip)
         const isValid = await verifyRSAKeyPair(onChainPublicKey); // Unified: Defaults to 'userPrivateKey'
-        console.log('Keypair verification result:', isValid);
-        
         if (!isValid) {
           console.error("❌ RSA keypair verification failed. Keys mismatch.");
           
@@ -125,28 +107,23 @@ useEffect(() => {
           try {
             created = await getCreatedRecords(userAddress);
           } catch (e) {
-            console.log('Could not fetch created records (user may not be verified yet)');
           }
           if (created && created.length > 0) {
             const userChoice = confirm(
               "Key mismatch detected!\n\nLocal private key doesn't match on-chain public key.\n\nRegenerating will lock existing records FOREVER.\n\nContinue and regenerate? (Refresh/reconnect wallet to retry.)"
             );
             if (!userChoice) {
-              console.log("❌ User aborted regeneration. Proceeding anyway (decryptions may fail).");
               setHasPublicKey(true);
               await fetchSharedRecords(userAddress); // Proceed to fetch
               return;
             }
           }
-          
-          console.log("⚠️ Auto-regenerating keys (Old data will be lost)");
           await generateAndRegisterUserKey(userAddress);
           onChainPublicKey = await getUserPublicKey(userAddress);
           localStorage.setItem('userPublicKey', onChainPublicKey || '');
           setHasPublicKey(true);
           alert("Your keys were mismatched and have been automatically regenerated. Old encrypted data is no longer accessible.");
         } else {
-          console.log('✅ Keypair verified successfully.');
           // Sync localStorage
           localStorage.setItem('userPublicKey', onChainPublicKey);
           setHasPublicKey(true);
@@ -157,7 +134,6 @@ useEffect(() => {
       if (isVerified) {
         await fetchSharedRecords(userAddress);
       } else {
-        console.log('User not verified, skipping shared records fetch');
       }
     };
 
@@ -167,10 +143,8 @@ useEffect(() => {
   // Extracted fetch function (for clarity and reuse)
   const fetchSharedRecords = async (userAddress: string) => {
     try {
-      console.log('📋 Fetching shared records…');
       const records = await getSharedRecordsWithDetails(userAddress);
       setSharedRecords(records);
-      console.log(`✅ Fetched ${records.length} shared records`);
     } catch (err) {
       console.error('❌ Failed to fetch shared records:', err);
       console.warn('This may be due to mismatched RSA keys or decryption issues.');
@@ -200,25 +174,14 @@ useEffect(() => {
   }, [walletAddress, isVerified]);
 
   const fetchMedicalRecords = async () => {
-    console.log('My wallet address: ', walletAddress);
-    
     // Skip fetching if user is not verified
     if (!isVerified) {
-      console.log('User not verified, skipping created records fetch');
       setCreatedRecords([]);
       return;
     }
     
     try {
       const records = await getCreatedRecords(walletAddress);
-      console.log('My records created (RAW): ', records);
-      if (records && records.length > 0) {
-        console.log('First record keys:', Object.keys(records[0]));
-        console.log('First record values:', records[0]);
-        console.log('First record patient:', records[0].patient);
-        console.log('First record patientAddress:', records[0].patientAddress);
-        console.log('First record [4]:', records[0][4]); // Check if it's at a specific index
-      }
       setCreatedRecords(records);
     } catch (error) {
       console.error('Error fetching created records:', error);

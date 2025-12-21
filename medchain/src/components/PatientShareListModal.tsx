@@ -34,7 +34,6 @@ const PatientShareListModal: React.FC<PatientShareListModalProps> = ({
       setLoading(true);
       try {
         const users = await getAllUsers();
-        console.log('Fetched users:', users);
         //Extract wallet addresses of users
         const userAddresses = users
           .map((user: any) => user?.walletAddress)
@@ -75,14 +74,11 @@ const handleShare = async() => {
   setLoading(true);
 
   try {
-    console.log('Sharing record with patient: ', selectedPatient);
     const medicalRecordID = `REC-${Date.now()}`; 
 
     //convert to base64
     const files = setFiles;
     const base64 = await fileToBase64(files[0].file);
-    console.log('Converted file to base64');
-
     //aes encrypt json payload
     const payload = JSON.stringify({
       file: { fileName: files[0].name, fileType: files[0].type, base64: base64 },
@@ -93,8 +89,6 @@ const handleShare = async() => {
         recordType: recordType
       }
     });
-    console.log('Created JSON payload for encryption');
-
     //upload to pinata to get cid
     const aesKey = CryptoJS.lib.WordArray.random(32);
     const aesKeyHex = aesKey.toString(CryptoJS.enc.Hex);
@@ -115,16 +109,12 @@ const handleShare = async() => {
 
     const result = await uploadResponse.json();
     const cid = result.cid;
-    console.log('Uploaded encrypted payload to IPFS, CID: ', cid);
-
     //encrypt the aes key with patient's public key
     const patientPublicKey = await getUserPublicKey(selectedPatient);
     if (!patientPublicKey) throw new Error('Patient has no public key registered');
 
     // encryptWithPublicKey now returns hex directly
     const encryptedKeyForPatient = await encryptWithPublicKey(aesKeyHex, patientPublicKey);
-    console.log('Encrypted key for patient:', encryptedKeyForPatient);
-
     // Verify format
     if (!encryptedKeyForPatient.startsWith('0x')) {
       throw new Error('Encrypted key is not in hex format');
@@ -132,8 +122,6 @@ const handleShare = async() => {
 
     // add medical record on chain
     await addMedicalRecord(selectedPatient, medicalRecordID, cid, encryptedKeyForPatient, recordType);
-    console.log('Successfully shared record with patient: ', selectedPatient);
-    
     setSuccess(true);
     print('Record shared successfully!', 'success', () => {});
     

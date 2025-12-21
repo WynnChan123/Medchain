@@ -32,21 +32,13 @@ export async function decryptAESKey(
     if (!currentAddress) {
       throw new Error('No wallet address available for key fetch');
     }
-    
-    console.log('🔓 Decrypting AES key for address:', currentAddress);
-    console.log('Raw encrypted key hex:', encryptedKeyHex);
-    
     // Get unified private key (address-aware)
     const privateKey = await getPrivateKey('userPrivateKey', currentAddress);
     if (!privateKey) {
       throw new Error(`Private key not found for ${currentAddress}. Please generate keys first.`);
     }
-
-    console.log('✅ Private key retrieved from IndexedDB');
-    
     // Decrypt using WebCrypto
     const decryptedAESKey = await decryptAESKeyWithPrivateKey(encryptedKeyHex, privateKey);
-    console.log('✅ AES Key decrypted successfully');
     return decryptedAESKey;
   } catch (error) {
     console.error('❌ Error decrypting AES key:', error);
@@ -83,33 +75,17 @@ export function decryptDocumentContent(
  */
 export async function fetchAndDecryptDocuments(requestId: number) {
   try {
-    console.log('Starting decryption for request:', requestId);
-
     // 1. Get encrypted AES key from contract
-    console.log('Fetching encrypted key from contract...');
     const encryptedKeyHex = await getEncryptedKey(requestId);
-    console.log('Encrypted key (hex):', encryptedKeyHex);
-
     // 2. Decrypt the AES key (using unified userPrivateKey)
-    console.log('Decrypting AES key...');
     const aesKeyHex = await decryptAESKey(encryptedKeyHex);
-    console.log('AES key decrypted successfully');
-
     // 3. Get the CID from the request
-    console.log('Fetching request data...');
     const request = await getRequestById(requestId);
-    console.log('Admin addresses', request.adminAddresses);
-    console.log('Request CID:', request.cid);
-
     const cids = JSON.parse(request.cid); // Array of {name, cid}
-    console.log('Parsed CIDs:', cids);
-
     // 4. Fetch and decrypt each document from IPFS
     const decryptedDocuments = await Promise.all(
       cids.map(async (cidObj: { name: string; cid: string }) => {
         try {
-          console.log(`Fetching document from IPFS: ${cidObj.cid}`);
-
           // Fetch encrypted content from IPFS via backend proxy
           const response = await fetch(
             `http://localhost:8080/api/upload/fetchFromIPFS/${cidObj.cid}`
@@ -122,16 +98,11 @@ export async function fetchAndDecryptDocuments(requestId: number) {
           }
 
           const encryptedContent = await response.text();
-          console.log(`Fetched encrypted content for ${cidObj.name}`);
-
           // Decrypt the content
-          console.log(`Decrypting content for ${cidObj.name}...`);
           const decryptedData = decryptDocumentContent(
             encryptedContent,
             aesKeyHex
           );
-          console.log(`Successfully decrypted ${cidObj.name}`);
-
           return {
             name: cidObj.name,
             ...decryptedData,
@@ -142,8 +113,6 @@ export async function fetchAndDecryptDocuments(requestId: number) {
         }
       })
     );
-
-    console.log('All documents decrypted successfully');
     return decryptedDocuments;
   } catch (error) {
     console.error('Error fetching and decrypting documents:', error);
@@ -162,22 +131,12 @@ export async function fetchAndDecryptPatientRecord(
     if (!patientAddress) {
       throw new Error('Patient address is required to fetch records');
     }
-
-    console.log('🔐 Fetching encrypted key for record:', recordId);
     const encryptedKeyHex = await getEncryptedKeyForPatient(recordId, patientAddress);
-    console.log('🔐 Encrypted key received:', {
-      value: encryptedKeyHex,
-      type: typeof encryptedKeyHex,
-      length: encryptedKeyHex?.length
-    });
-
     if (!encryptedKeyHex || encryptedKeyHex === '0x') {
       throw new Error(
         'No encrypted key found for this record. The record might not have been shared correctly.'
       );
     }
-
-    console.log('🔓 Attempting to decrypt AES key...');
     // Decrypt using unified userPrivateKey
     const aesKeyHex = await decryptAESKey(encryptedKeyHex);
 

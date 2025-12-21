@@ -13,10 +13,6 @@ import React, { useState } from 'react'
     const formatCurrency = (amount: string) => `$${amount.toLocaleString()}`;
     const handleSubmitAction = () => {
       if(!selectedClaim) return;
-      console.log(`${modalAction} claim #${selectedClaim.claimId}`, {
-        approvedAmount: modalAction === 'approve' ? approvedAmount : 0,
-        notes,
-      });
       setShowModal(false);
     }
 

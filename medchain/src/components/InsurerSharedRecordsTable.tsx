@@ -62,7 +62,6 @@ const InsurerSharedRecordsTable: React.FC<InsurerSharedRecordsTableProps> = ({ w
     
     // Skip fetching if not verified
     if (!isVerified) {
-      console.log('User not verified, skipping shared records fetch');
       setRecords([]);
       return;
     }

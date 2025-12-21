@@ -7,24 +7,17 @@ import { verifyRSAKeyPair } from './integration'; // For post-gen validate
 export async function generateAndRegisterUserKey(userAddress?: string): Promise<string> {
   try {
     const address = userAddress || await getSignerAddress();
-    console.log(`Generating RSA key pair for user ${address}...`);
-    
     // Cleanup old keys first (prevents stale pair)
     await deletePrivateKey('userPrivateKey', address); // Delete existing unified
     await cleanupLegacyKeys(address); // Purge role-specific
-    console.log('🧹 Cleaned up old keys for', address);
-    
     const keyPair = await generateRSAKeyPair();
     const publicKeyPEM = await exportPublicKeyToPEM(keyPair.publicKey);
     
     // Store new key
     await storePrivateKey("userPrivateKey", keyPair.privateKey, address);
     localStorage.setItem('userPublicKey', publicKeyPEM); // Unified LS (no prefix for simplicity)
-    console.log('Keys generated/stored. Public preview:', publicKeyPEM.substring(0, 100) + '...');
-    
     const contract = await writeUpgradeContract();
     const tx = await contract.registerAdminPublicKey(publicKeyPEM);
-    console.log('Tx sent:', tx.hash);
     const receipt = await tx.wait(1);
     if (receipt.status !== 1) {
       throw new Error(`Registration failed: ${tx.hash}`);
@@ -46,8 +39,6 @@ export async function generateAndRegisterUserKey(userAddress?: string): Promise<
     if (!isValid) {
       throw new Error('Generated pair failed validation—retry generation');
     }
-    console.log("✅ New keypair validated on-chain!");
-
     return publicKeyPEM;
   } catch (error) {
     console.error('Error generating/registering user key:', error);
