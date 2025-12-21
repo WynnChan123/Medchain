@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import TopBar from '../../components/Topbar';
+import { API_URL } from '@/lib/config';
 import InsurerSideBar from '@/components/Sidebar/InsurerSideBar';
 
 
@@ -16,7 +17,7 @@ const InsurerLayout = ({children}: {children: React.ReactNode}) => {
       setToken(storedToken);
 
       if (storedToken) {
-        fetch('${API_URL}/api/user/profile', {
+        fetch(`${API_URL}/api/user/profile', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',

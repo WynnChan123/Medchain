@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import AdminSideBar from '../../components/Sidebar/AdminSideBar';
 import TopBar from '../../components/Topbar';
+import { API_URL } from '@/lib/config';
 
 const AdminLayout = ({children}: {children: React.ReactNode}) => {
     const [token, setToken] = useState('');
@@ -15,7 +16,7 @@ const AdminLayout = ({children}: {children: React.ReactNode}) => {
       setToken(storedToken);
 
       if (storedToken) {
-        fetch('${API_URL}/api/user/profile', {
+        fetch(`${API_URL}/api/user/profile`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
