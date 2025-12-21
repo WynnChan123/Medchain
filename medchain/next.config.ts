@@ -4,9 +4,8 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  // Empty turbopack config to silence Next.js 16 warning
+  turbopack: {},
   webpack: (config) => {
     config.externals.push('pino-pretty', 'lokijs', 'encoding');
     
@@ -22,6 +21,7 @@ const nextConfig: NextConfig = {
     ];
     
     return config;
-  },};
+  },
+};
 
 export default nextConfig;
