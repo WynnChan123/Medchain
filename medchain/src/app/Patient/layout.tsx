@@ -16,7 +16,7 @@ const PatientLayout = ({children}: {children: React.ReactNode}) => {
       setToken(storedToken);
 
       if (storedToken) {
-        fetch('http://localhost:8080/api/user/profile', {
+        fetch('${API_URL}/api/user/profile', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',

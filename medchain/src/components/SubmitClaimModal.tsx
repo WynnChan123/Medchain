@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, DollarSign, FileText, Building2, AlertCircle, Upload, Image as ImageIcon, Trash2, Check } from 'lucide-react';
+import { X, DollarSign, FileText, AlertCircle, Upload, Image as ImageIcon, Trash2, Check } from 'lucide-react';
 import { ethers } from 'ethers';
 import { submitClaim, getInsurers } from '@/lib/integration';
 import { print } from '../../utils/toast';

@@ -3,13 +3,18 @@
 
 //components/ActionModal.tsx
 import React, { useState } from 'react'
+
+interface Claim {
+  claimId: number;
+  requestedAmount: string;
+}
   
   const ActionModal = () => {
     const [showModal, setShowModal] = useState(false);
     const [approvedAmount, setApprovedAmount] = useState('');
     const [notes, setNotes] = useState('');
     const [modalAction, setModalAction] = useState('');
-    const [selectedClaim, setSelectedClaim] = useState(null);
+    const [selectedClaim, setSelectedClaim] = useState<Claim | null>(null);
     const formatCurrency = (amount: string) => `$${amount.toLocaleString()}`;
     const handleSubmitAction = () => {
       if(!selectedClaim) return;
@@ -25,7 +30,7 @@ import React, { useState } from 'react'
         <div className="space-y-4 mb-6">
           <div className="bg-gray-800 p-3 rounded">
             <p className="text-gray-400 text-sm">Requested Amount</p>
-            <p className="text-white font-semibold">{formatCurrency(selectedClaim?.requestedAmount)}</p>
+            <p className="text-white font-semibold">{selectedClaim?.requestedAmount ? formatCurrency(selectedClaim.requestedAmount) : 'N/A'}</p>
           </div>
           {modalAction === 'approve' && (
             <div>

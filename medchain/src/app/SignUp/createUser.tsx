@@ -1,7 +1,5 @@
 'use client';
 
-import Button from '@/components/Button';
-import InputField from '@/components/InputField';
 import Dropdown from '@/components/SignUp/dropdown';
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
@@ -107,7 +105,7 @@ export default function CreateUser() {
         return false;
       }
 
-      const response = await fetch('http://localhost:8080/api/auth/signUp', {
+      const response = await fetch('${API_URL}/api/auth/signUp', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

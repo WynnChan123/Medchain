@@ -4,6 +4,7 @@ import { getAcknowledgedRequestsByAdmin, getPendingRequestsByAdmin } from '@/lib
 import { fetchAndDecryptDocuments } from '@/lib/decryption';
 import { UserRole } from '../../utils/userRole';
 import { BigNumber } from 'ethers';
+import { API_URL } from '@/lib/config';
 
 interface UserDetailsModalProps {
   isOpen: boolean;
@@ -52,7 +53,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
       if (token) {
         try {
           // First try direct wallet lookup
-          const response = await fetch(`http://localhost:8080/api/user/getByWallet/${userAddress}`, {
+          const response = await fetch(`${API_URL}/api/user/getByWallet/${userAddress}`, {
             headers: {
               'Authorization': `Bearer ${token}`
             }
@@ -70,7 +71,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
         // If not found by direct lookup, fetch all users and match
         if (!userFound) {
           try {
-            const allUsersResponse = await fetch('http://localhost:8080/api/user/all', {
+            const allUsersResponse = await fetch('${API_URL}/api/user/all', {
               headers: {
                 'Authorization': `Bearer ${token}`
               }

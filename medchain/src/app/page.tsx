@@ -1,22 +1,17 @@
 'use client';
 
-import InputField from '@/components/InputField';
 import Button from '@/components/Button';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Connect from '@/components/Connect';
 import useStore from '@/store/userStore';
 import {
   getPendingRequestByUser,
   getRole,
-  readContract,
-  registerUser,
   userExists,
 } from '@/lib/integration';
-// import { User, UserSquare } from 'lucide-react';
 import { UserRole } from '../../utils/userRole';
 import { ethers } from 'ethers';
-import { User } from '@reown/appkit';
-import { toast } from 'react-toastify';
+import { API_URL } from '@/lib/config';
 
 export default function Login() {
   const [publicKey, setPublicKey] = useState<string | null>(null);
@@ -37,7 +32,7 @@ export default function Login() {
 
 
     try {
-      const response = await fetch('http://localhost:8080/api/auth/logIn', {
+      const response = await fetch(`${API_URL}/api/auth/logIn`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ publicKey }),
@@ -88,7 +83,7 @@ export default function Login() {
 
         // Fetch user profile with the token
         const profileRes = await fetch(
-          'http://localhost:8080/api/user/profile',
+          `${API_URL}/api/user/profile`,
           {
             method: 'GET',
             headers: {

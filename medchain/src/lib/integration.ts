@@ -2,13 +2,11 @@
 import { ethers } from 'ethers';
 import { UserRole } from '../../utils/userRole';
 import CryptoJS from 'crypto-js';
-import NodeRSA from 'node-rsa';
-import { read } from 'node:fs';
 import { decryptAESKey } from './decryption';
-import { getPrivateKey } from './keyStorage';
 import { getUserPublicKey } from './userKeys';
 import { encryptAESKeyWithPublicKey } from './webCryptoUtils';
 import { Notification, NotificationType } from "@/types/notification";
+import { API_URL } from './config';
 
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_SMART_CONTRACT_ADDRESS!;
@@ -61,7 +59,7 @@ export async function fetchAbiFromEtherscan(address: string): Promise<any> {
     }
 
     const response = await fetch(
-      `http://localhost:8080/api/etherscan/getABI/${address}`
+      `${API_URL}/api/etherscan/getABI/${address}`
     );
 
     if (!response.ok) {
@@ -425,7 +423,7 @@ export async function submitRoleUpgradeRequest(
 
       //upload to pinata
       const uploadResponse = await fetch(
-        'http://localhost:8080/api/upload/uploadToPinata',
+        `${API_URL}/api/upload/uploadToPinata`,
         {
           method: 'POST',
           headers: {
@@ -752,7 +750,7 @@ export async function submitClaim(
       }
     };
 
-    const uploadResponse = await fetch('http://localhost:8080/api/upload/uploadToPinata', {
+    const uploadResponse = await fetch(`${API_URL}/api/upload/uploadToPinata`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -871,7 +869,7 @@ export async function getClaimFiles(cid: string, insurerAddress: string) {
   try {
     // 1. Fetch from IPFS
     // Use backend proxy to fetch from IPFS (handles private gateway/signed URLs)
-    const response = await fetch(`http://localhost:8080/api/upload/fetchFromIPFS/${cid}`);
+    const response = await fetch(`${API_URL}/api/upload/fetchFromIPFS/${cid}`);
     if (!response.ok) {
       const text = await response.text();
       throw new Error(`IPFS fetch failed: ${response.status} ${response.statusText} - ${text}`);
@@ -1240,7 +1238,7 @@ export async function fetchAndDecryptSharedRecord(
 
     // 4. Fetch encrypted document from IPFS
     const response = await fetch(
-      `http://localhost:8080/api/upload/fetchFromIPFS/${record.cid}`
+      `${API_URL}/api/upload/fetchFromIPFS/${record.cid}`
     );
 
     if (!response.ok) {

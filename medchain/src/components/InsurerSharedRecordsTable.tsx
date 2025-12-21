@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Eye, FileText, Loader2, AlertCircle } from 'lucide-react';
+import { Eye, FileText, Loader2 } from 'lucide-react';
 import { getSharedRecordsWithDetails } from '@/lib/integration';
 import { getUsernamesByWallets } from '@/lib/userUtils';
 import PatientRecordViewerModal from './PatientRecordViewerModal';

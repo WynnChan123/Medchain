@@ -1,4 +1,5 @@
 // userUtils.ts - Helper functions for user data management
+import { API_URL } from './config';
 
 interface UserProfile {
   name: string;
@@ -24,7 +25,7 @@ export async function getUsernameByWallet(walletAddress: string): Promise<string
       return ''; // Return empty if no token
     }
 
-    const response = await fetch(`http://localhost:8080/api/user/getByWallet/${walletAddress}`, {
+    const response = await fetch(`${API_URL}/api/user/getByWallet/${walletAddress}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

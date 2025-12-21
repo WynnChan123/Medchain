@@ -26,7 +26,7 @@ const CreateAdminModal = ({ isOpen, onClose }: createAdminModalProps) => {
       await createAdmin(walletAddress);
 
       // Persist the admin name in the backend
-      const response = await fetch('http://localhost:8080/api/auth/signUp', {
+      const response = await fetch('${API_URL}/api/auth/signUp', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

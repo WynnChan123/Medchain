@@ -9,6 +9,7 @@ import {
 import { getPrivateKey } from './keyStorage';
 import { decryptAESKeyWithPrivateKey } from './webCryptoUtils';
 import { ethers } from 'ethers';
+import { API_URL } from './config';
 
 /**
  * Decrypt the AES key using user's private RSA key
@@ -88,7 +89,7 @@ export async function fetchAndDecryptDocuments(requestId: number) {
         try {
           // Fetch encrypted content from IPFS via backend proxy
           const response = await fetch(
-            `http://localhost:8080/api/upload/fetchFromIPFS/${cidObj.cid}`
+            `${API_URL}/api/upload/fetchFromIPFS/${cidObj.cid}`
           );
 
           if (!response.ok) {
@@ -148,7 +149,7 @@ export async function fetchAndDecryptPatientRecord(
     }
 
     const response = await fetch(
-      `http://localhost:8080/api/upload/fetchFromIPFS/${cid}`
+      `${API_URL}/api/upload/fetchFromIPFS/${cid}`
     );
 
     if (!response.ok) {

@@ -27,7 +27,7 @@ const ProfilePage = () => {
       }
 
       try {
-        const response = await fetch('http://localhost:8080/api/user/profile', {
+        const response = await fetch('${API_URL}/api/user/profile', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -67,7 +67,7 @@ const ProfilePage = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:8080/api/user/update-profile', {
+      const response = await fetch('${API_URL}/api/user/update-profile', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -120,7 +120,7 @@ const ProfilePage = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:8080/api/user/change-password', {
+      const response = await fetch('${API_URL}/api/user/change-password', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

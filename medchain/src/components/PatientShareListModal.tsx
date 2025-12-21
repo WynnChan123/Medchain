@@ -1,4 +1,4 @@
-import { addMedicalRecord, encryptWithPublicKey, fileToBase64, getAdminPublicKey, getAllUsers, getRole } from '@/lib/integration';
+import { addMedicalRecord, encryptWithPublicKey, fileToBase64, getAllUsers, getRole } from '@/lib/integration';
 import { X, Check } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { UserRole } from '../../utils/userRole';
@@ -94,7 +94,7 @@ const handleShare = async() => {
     const aesKeyHex = aesKey.toString(CryptoJS.enc.Hex);
     const encrypted = CryptoJS.AES.encrypt(payload, aesKeyHex).toString();
     
-    const uploadResponse = await fetch('http://localhost:8080/api/upload/uploadToPinata', {
+    const uploadResponse = await fetch('${API_URL}/api/upload/uploadToPinata', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
