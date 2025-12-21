@@ -17,7 +17,7 @@ const HealthcareLayout = ({children}: {children: React.ReactNode}) => {
       setToken(storedToken);
 
       if (storedToken) {
-        fetch(`${API_URL}/api/user/profile', {
+        fetch(`${API_URL}/api/user/profile`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
