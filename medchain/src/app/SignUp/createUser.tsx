@@ -334,7 +334,7 @@ export default function CreateUser() {
           onConnect={(account) => setPublicKey(account)}
           onError={(message) => setErrorMessage(message)}
         />
-        <div className="bg-gray-800 my-4 sm:my-10 mx-2 sm:mx-4 md:mx-10 rounded-lg shadow-lg w-full sm:w-11/12 md:w-3/4 lg:w-2/3 xl:w-1/2 max-w-2xl">
+        <div className="bg-gray-800 my-4 sm:my-10 mx-2 sm:mx-4 md:mx-10 rounded-lg shadow-lg w-full sm:w-11/12 md:w-3/4 lg:w-2/3 xl:w-1/2 max-w-xl">
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 bg-gray-700 rounded-2xl p-2">
             {steps.map((step, index) => (
               <div

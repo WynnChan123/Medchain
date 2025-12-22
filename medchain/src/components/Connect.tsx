@@ -31,21 +31,20 @@ const Connect: React.FC<ConnectProps> = ({ onConnect, onError }) => {
   };
 
   return (
-    <div style={{ position: 'absolute', top: '20px', right: '20px' }}>
+    <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
       <button
         onClick={handleClick}
-        style={{
-          background: isConnected ? '#A5CC82' : 'white',
-          padding: '10px 20px',
-          border: '1px solid #ccc',
-          borderRadius: '5px',
-          cursor: 'pointer',
-        }}
+        className={`px-4 py-2 sm:px-5 sm:py-2.5 rounded-lg border border-gray-300 cursor-pointer font-medium text-sm sm:text-base transition-all hover:shadow-md ${
+          isConnected 
+            ? 'bg-green-400 text-gray-800 hover:bg-green-500' 
+            : 'bg-white text-gray-800 hover:bg-gray-100'
+        }`}
       >
-        {isConnected ? 'Connected' : 'Connect Wallet'}
+        <span className="hidden sm:inline">{isConnected ? 'Connected' : 'Connect Wallet'}</span>
+        <span className="sm:hidden">{isConnected ? '✓' : 'Connect'}</span>
       </button>
       {isConnected && (
-        <span style={{ marginLeft: '10px', color: '#A5CC82' }}>
+        <span className="hidden md:inline text-green-400 font-mono text-sm">
           {address!!.slice(0, 6)}...{address!!.slice(-4)}
         </span>
       )}
