@@ -328,26 +328,26 @@ export default function CreateUser() {
 
   return (
     <div>
-      <div className="min-h-screen flex items-center justify-center bg-gray-900 bg-dot-pattern relative">
+      <div className="min-h-screen flex items-center justify-center bg-gray-900 bg-dot-pattern relative px-4 sm:px-6 lg:px-8">
         <ToastContainer />
         <Connect
           onConnect={(account) => setPublicKey(account)}
           onError={(message) => setErrorMessage(message)}
         />
-        <div className="bg-gray-800 m-10 rounded-lg shadow-lg w-1/2 max-w-md">
-          <div className="flex gap-3 bg-gray-700 rounded-2xl p-2">
+        <div className="bg-gray-800 my-4 sm:my-10 mx-2 sm:mx-4 md:mx-10 rounded-lg shadow-lg w-full sm:w-11/12 md:w-3/4 lg:w-2/3 xl:w-1/2 max-w-2xl">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 bg-gray-700 rounded-2xl p-2">
             {steps.map((step, index) => (
               <div
                 key={step.number}
-                className={`flex-0 flex items-center justify-center px-4 py-3 rounded-xl transition-all duration-300 cursor-pointer ${
+                className={`flex-1 flex items-center justify-center px-2 sm:px-4 py-2 sm:py-3 rounded-xl transition-all duration-300 cursor-pointer ${
                   currentStep === step.number
                     ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow-lg shadow-blue-500/30'
                     : 'text-gray-400 hover:bg-gray-600'
                 }`}
               >
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-1 sm:space-x-2">
                   <div
-                    className={`w-7 h-7 rounded-full flex items-center justify-center font-semibold text-sm transition-all duration-300 ${
+                    className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center font-semibold text-xs sm:text-sm transition-all duration-300 flex-shrink-0 ${
                       currentStep === step.number
                         ? 'bg-white text-blue-500'
                         : 'bg-gray-600 text-gray-400'
@@ -355,7 +355,7 @@ export default function CreateUser() {
                   >
                     {step.number}
                   </div>
-                  <span className="font-medium text-sm">{step.title}</span>
+                  <span className="font-medium text-xs sm:text-sm truncate">{step.title}</span>
                 </div>
               </div>
             ))}
@@ -363,8 +363,8 @@ export default function CreateUser() {
 
           {/* Form Content */}
           <div
-            className="p-8 relative overflow-hidden"
-            style={{ minHeight: '450px' }}
+            className="p-4 sm:p-6 md:p-8 relative overflow-hidden"
+            style={{ minHeight: '400px' }}
           >
             {/* Step 1 - Username */}
             <div
@@ -376,11 +376,11 @@ export default function CreateUser() {
                   : 'translate-x-full opacity-0'
               }`}
             >
-              <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold text-white mb-3 pt-5">
+              <div className="text-center mb-6 sm:mb-8">
+                <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2 sm:mb-3 pt-3 sm:pt-5">
                   Welcome To MedChain
                 </h2>
-                <p className="text-gray-400">
+                <p className="text-sm sm:text-base text-gray-400">
                   To start utilizing MedChain please sign up with your personal
                   info
                 </p>
@@ -412,11 +412,11 @@ export default function CreateUser() {
                   : '-translate-x-full opacity-0'
               }`}
             >
-              <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold text-white mb-3 pt-5">
+              <div className="text-center mb-6 sm:mb-8">
+                <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2 sm:mb-3 pt-3 sm:pt-5">
                   Select Your Role
                 </h2>
-                <p className="text-gray-400">
+                <p className="text-sm sm:text-base text-gray-400">
                   Choose the role that best describes you
                 </p>
               </div>
@@ -480,11 +480,11 @@ export default function CreateUser() {
                     : '-translate-x-full opacity-0'
                 }`}
               >
-                <div className="text-center mb-8"> 
-                  <h2 className="text-3xl font-bold text-white mb-3 pt-5">
+                <div className="text-center mb-6 sm:mb-8"> 
+                  <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2 sm:mb-3 pt-3 sm:pt-5">
                     Share Your Info
                   </h2>
-                  <p className="text-gray-400">
+                  <p className="text-sm sm:text-base text-gray-400">
                     Complete your profile with additional information
                   </p>
                 </div>
@@ -624,37 +624,38 @@ export default function CreateUser() {
               </div>
             )}
           </div>
-          <div className="flex justify-between items-center px-8 py-6 bg-gray-750 border-t border-gray-700">
+          <div className="flex justify-between items-center px-4 sm:px-6 md:px-8 py-4 sm:py-6 bg-gray-750 border-t border-gray-700">
             <button
               onClick={handleBack}
               disabled={currentStep === 1}
-              className="flex items-center space-x-2 px-6 py-3 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center space-x-1 sm:space-x-2 px-3 sm:px-4 md:px-6 py-2 sm:py-3 text-sm sm:text-base text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <ChevronLeft size={20} />
-              <span>Back</span>
+              <ChevronLeft size={18} className="sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline">Back</span>
             </button>
 
             {currentStep < totalSteps ? (
               <button
                 onClick={() => handleNext()}
-                className="flex items-center space-x-2 px-8 py-3 bg-gradient-to-r text-white rounded-lg font-medium hover:shadow-lg bg-blue-600 hover:bg-blue-700 transform hover:scale-105 transition-all"
+                className="flex items-center space-x-1 sm:space-x-2 px-4 sm:px-6 md:px-8 py-2 sm:py-3 text-sm sm:text-base bg-gradient-to-r text-white rounded-lg font-medium hover:shadow-lg bg-blue-600 hover:bg-blue-700 transform hover:scale-105 transition-all"
               >
-                <span>Next Step</span>
-                <ChevronRight size={20} />
+                <span>Next</span>
+                <ChevronRight size={18} className="sm:w-5 sm:h-5" />
               </button>
             ) : (
               <button
                 onClick={() => handleSubmit()}
-                className="px-8 py-3 bg-gradient-to-r bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium hover:shadow-lg transform hover:scale-105 transition-all"
+                className="px-4 sm:px-6 md:px-8 py-2 sm:py-3 text-sm sm:text-base bg-gradient-to-r bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium hover:shadow-lg transform hover:scale-105 transition-all"
               >
-                Create Account
+                <span className="hidden sm:inline">Create Account</span>
+                <span className="sm:hidden">Create</span>
               </button>
             )}
           </div>
           {errorMessage && (
-            <p className="text-red-400 text-center mt-2">{errorMessage}</p>
+            <p className="text-red-400 text-center mt-2 text-sm sm:text-base px-4">{errorMessage}</p>
           )}
-          <p className="mt-6 mb-6 text-center text-gray-400">
+          <p className="mt-4 sm:mt-6 mb-4 sm:mb-6 text-center text-sm sm:text-base text-gray-400 px-4">
             Already have an account?{' '}
             <a href="/" className="text-blue-400 hover:underline">
               Login Now
