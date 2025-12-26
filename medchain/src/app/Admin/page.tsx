@@ -65,8 +65,8 @@ const Dashboard = () => {
       const userRole = await getRole(address);
       // NEW: Unified key check and generation for Admin (no old imports/fallbacks)
       if (userRole === UserRole.Admin) {
-        // Check if we've already verified keys this session
-        const sessionKeyVerified = sessionStorage.getItem(`keyVerified_${address}`);
+        // Check if we've already verified keys (persists across browser sessions)
+        const keyVerified = localStorage.getItem(`keyVerified_${address}`);
         
         // Cleanup legacy keys first (one-time)
         await cleanupLegacyKeys(address);
@@ -80,14 +80,14 @@ const Dashboard = () => {
           if (!onChainPublicKey) {
             console.error('❌ Failed to confirm on-chain key after generation');
             setHasPublicKey(true); // Proceed optimistically
-            sessionStorage.setItem(`keyVerified_${address}`, 'true');
+            localStorage.setItem(`keyVerified_${address}`, 'true');
             await fetchRequests(address); // Continue to fetch
             return;
           }
           setHasPublicKey(true);
-          sessionStorage.setItem(`keyVerified_${address}`, 'true');
-        } else if (!sessionKeyVerified) {
-          // Only verify if we haven't verified this session
+          localStorage.setItem(`keyVerified_${address}`, 'true');
+        } else if (!keyVerified) {
+          // Only verify if we haven't verified before (even across sessions)
           // Always verify (address-aware)
           const isValid = await verifyRSAKeyPair(onChainPublicKey); // Pass address
           if (!isValid) {
@@ -101,7 +101,7 @@ const Dashboard = () => {
               );
               if (!userChoice) {
                 setHasPublicKey(true);
-                sessionStorage.setItem(`keyVerified_${address}`, 'true');
+                localStorage.setItem(`keyVerified_${address}`, 'true');
                 await fetchRequests(address); // Proceed to fetch
                 return;
               }
@@ -110,16 +110,16 @@ const Dashboard = () => {
             onChainPublicKey = await getUserPublicKey(address);
             localStorage.setItem('userPublicKey', onChainPublicKey || ''); // Unified LS
             setHasPublicKey(true);
-            sessionStorage.setItem(`keyVerified_${address}`, 'true');
+            localStorage.setItem(`keyVerified_${address}`, 'true');
             alert("Your keys were mismatched and have been automatically regenerated. Old encrypted data is no longer accessible.");
           } else {
             // Sync localStorage
             localStorage.setItem('userPublicKey', onChainPublicKey);
             setHasPublicKey(true);
-            sessionStorage.setItem(`keyVerified_${address}`, 'true');
+            localStorage.setItem(`keyVerified_${address}`, 'true');
           }
         } else {
-          // Already verified this session, skip verification
+          // Already verified before, skip verification (persists across browser restarts)
           setHasPublicKey(true);
         }
       }

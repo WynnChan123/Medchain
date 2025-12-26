@@ -39,6 +39,7 @@ const InsurerDashboard = () => {
   });
   const [loading, setLoading] = useState(true);
   const [isVerified, setIsVerified] = useState<boolean>(false);
+  const [hasPublicKey, setHasPublicKey] = useState<boolean>(false);
   const setRole = useStore((state) => state.setRole);
 
   useEffect(() => {
@@ -63,6 +64,67 @@ const InsurerDashboard = () => {
           if (!userIsVerified) {
             setLoading(false);
             return;
+          }
+          
+          // Check if we've already verified keys (persists across browser sessions)
+          const keyVerified = localStorage.getItem(`keyVerified_${userAddress}`);
+          
+          // Cleanup legacy keys first (one-time)
+          const { cleanupLegacyKeys } = await import('@/lib/keyStorage');
+          await cleanupLegacyKeys(userAddress);
+          
+          // Import key verification functions
+          const { generateAndRegisterUserKey, getUserPublicKey } = await import('@/lib/userKeys');
+          const { verifyRSAKeyPair } = await import('@/lib/integration');
+          
+          // Unified key check and generation
+          const { hasPrivateKey } = await import('@/lib/keyStorage');
+          const hasLocalKey = await hasPrivateKey('userPrivateKey', userAddress);
+          let onChainPublicKey = await getUserPublicKey(userAddress);
+          
+          if (!hasLocalKey || !onChainPublicKey) {
+            await generateAndRegisterUserKey(userAddress);
+            // Re-fetch post-gen to confirm
+            onChainPublicKey = await getUserPublicKey(userAddress);
+            if (!onChainPublicKey) {
+              console.error('❌ Failed to confirm on-chain key after generation');
+              setHasPublicKey(true);
+              localStorage.setItem(`keyVerified_${userAddress}`, 'true');
+              // Continue to fetch claims
+            } else {
+              setHasPublicKey(true);
+              localStorage.setItem(`keyVerified_${userAddress}`, 'true');
+            }
+          } else if (!keyVerified) {
+            // Only verify if we haven't verified before (even across sessions)
+            const isValid = await verifyRSAKeyPair(onChainPublicKey);
+            if (!isValid) {
+              console.error("❌ RSA keypair verification failed. Keys mismatch.");
+              
+              const userChoice = confirm(
+                "Key mismatch detected!\n\nLocal private key doesn't match on-chain public key.\n\nRegenerating will lock existing access FOREVER.\n\nContinue and regenerate? (Refresh/reconnect wallet to retry.)"
+              );
+              if (!userChoice) {
+                setHasPublicKey(true);
+                localStorage.setItem(`keyVerified_${userAddress}`, 'true');
+                // Continue to fetch claims
+              } else {
+                await generateAndRegisterUserKey(userAddress);
+                onChainPublicKey = await getUserPublicKey(userAddress);
+                localStorage.setItem('userPublicKey', onChainPublicKey || '');
+                setHasPublicKey(true);
+                localStorage.setItem(`keyVerified_${userAddress}`, 'true');
+                alert("Your keys were mismatched and have been automatically regenerated. Old encrypted data is no longer accessible.");
+              }
+            } else {
+              // Sync localStorage
+              localStorage.setItem('userPublicKey', onChainPublicKey);
+              setHasPublicKey(true);
+              localStorage.setItem(`keyVerified_${userAddress}`, 'true');
+            }
+          } else {
+            // Already verified before, skip verification (persists across browser restarts)
+            setHasPublicKey(true);
           }
           
           // Only fetch data if verified

@@ -80,10 +80,18 @@ useEffect(() => {
       // Set role IMMEDIATELY (only for verified users)
       setSecondRole('Healthcare Provider');
 
+      // Check if we've already verified keys (persists across browser sessions)
+      const keyVerified = localStorage.getItem(`keyVerified_${userAddress}`);
+      
+      // Cleanup legacy keys first (one-time)
+      const { cleanupLegacyKeys } = await import('@/lib/keyStorage');
+      await cleanupLegacyKeys(userAddress);
+
       // Unified key check and generation (mirrors patient dashboard)
       const { hasPrivateKey } = await import('@/lib/keyStorage');
       const hasLocalKey = await hasPrivateKey('userPrivateKey', userAddress); // Unified ID
       let onChainPublicKey = await getUserPublicKey(userAddress); // Unified fetch
+      
       if (!hasLocalKey || !onChainPublicKey) {
         await generateAndRegisterUserKey(userAddress); // Unified gen (waits for tx)
         // Re-fetch post-gen to confirm
@@ -91,12 +99,14 @@ useEffect(() => {
         if (!onChainPublicKey) {
           console.error('❌ Failed to confirm on-chain key after generation');
           setHasPublicKey(true); // Proceed optimistically
+          localStorage.setItem(`keyVerified_${userAddress}`, 'true');
           await fetchSharedRecords(userAddress); // Continue to fetch
           return;
         }
         setHasPublicKey(true);
-      } else {
-        // Always verify (no localStorage skip)
+        localStorage.setItem(`keyVerified_${userAddress}`, 'true');
+      } else if (!keyVerified) {
+        // Only verify if we haven't verified before (even across sessions)
         const isValid = await verifyRSAKeyPair(onChainPublicKey); // Unified: Defaults to 'userPrivateKey'
         if (!isValid) {
           console.error("❌ RSA keypair verification failed. Keys mismatch.");
@@ -114,6 +124,7 @@ useEffect(() => {
             );
             if (!userChoice) {
               setHasPublicKey(true);
+              localStorage.setItem(`keyVerified_${userAddress}`, 'true');
               await fetchSharedRecords(userAddress); // Proceed to fetch
               return;
             }
@@ -122,12 +133,17 @@ useEffect(() => {
           onChainPublicKey = await getUserPublicKey(userAddress);
           localStorage.setItem('userPublicKey', onChainPublicKey || '');
           setHasPublicKey(true);
+          localStorage.setItem(`keyVerified_${userAddress}`, 'true');
           alert("Your keys were mismatched and have been automatically regenerated. Old encrypted data is no longer accessible.");
         } else {
           // Sync localStorage
           localStorage.setItem('userPublicKey', onChainPublicKey);
           setHasPublicKey(true);
+          localStorage.setItem(`keyVerified_${userAddress}`, 'true');
         }
+      } else {
+        // Already verified before, skip verification (persists across browser restarts)
+        setHasPublicKey(true);
       }
 
       // Fetch shared records after key handling (only if verified)
