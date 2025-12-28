@@ -19,15 +19,15 @@ async function main() {
   console.log(`📝 Admin wallet address: ${adminWallet}`);
 
   // Check if admin already exists in database
-  const existingPublicKey = await prisma.publicKey.findUnique({
-    where: { publicKey: adminWallet },
+  const existingWalletAddress = await prisma.walletAddress.findUnique({
+    where: { walletAddress: adminWallet },
     include: { user: true },
   });
 
-  if (existingPublicKey) {
+  if (existingWalletAddress) {
     console.log('✅ Admin wallet already registered in database');
-    console.log(`   User ID: ${existingPublicKey.user.id}`);
-    console.log(`   User Name: ${existingPublicKey.user.name}`);
+    console.log(`   User ID: ${existingWalletAddress.user.id}`);
+    console.log(`   User Name: ${existingWalletAddress.user.name}`);
     return;
   }
 
@@ -37,21 +37,21 @@ async function main() {
   const adminUser = await prisma.user.create({
     data: {
       name: 'Admin',
-      publicKeys: {
+      walletAddresses: {
         create: {
-          publicKey: adminWallet,
+          walletAddress: adminWallet,
         },
       },
     },
     include: {
-      publicKeys: true,
+      walletAddresses: true,
     },
   });
 
   console.log('✅ Admin user created successfully!');
   console.log(`   User ID: ${adminUser.id}`);
   console.log(`   User Name: ${adminUser.name}`);
-  console.log(`   Wallet Address: ${adminUser.publicKeys[0].publicKey}`);
+  console.log(`   Wallet Address: ${adminUser.walletAddresses[0].walletAddress}`);
   console.log('');
   console.log('🎉 Database seed completed!');
   console.log('💡 You can now login with your admin wallet address');

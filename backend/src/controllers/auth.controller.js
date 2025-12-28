@@ -24,9 +24,9 @@ export const signUp = async (req, res) => {
     const newUser = await prisma.user.create({
       data: { 
         name,
-        publicKeys: {
+        walletAddresses: {
           create: {
-            publicKey: publicKey,
+            walletAddress: publicKey,
           },
         },
       },
@@ -115,8 +115,8 @@ export const logIn = async (req, res) => {
     }
 
     // First, check if this publicKey already exists in database
-    let keyRecord = await prisma.publicKey.findUnique({
-      where: { publicKey },
+    let keyRecord = await prisma.walletAddress.findUnique({
+      where: { walletAddress: publicKey },
       include: { user: true }, // Include the associated user
     });
 
@@ -178,9 +178,9 @@ export const logIn = async (req, res) => {
       user = await prisma.user.create({
         data: {
           name: userName,
-          publicKeys: {
+          walletAddresses: {
             create: {
-              publicKey: publicKey,
+              walletAddress: publicKey,
             },
           },
         },

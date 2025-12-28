@@ -118,9 +118,9 @@ export const getUserByWallet = async (req, res) => {
             return res.status(400).json({ message: "Wallet address is required" });
         }
 
-        // First, try to find user by public key (wallet address)
-        const publicKeyRecord = await prisma.publicKey.findUnique({
-            where: { publicKey: walletAddress },
+        // First, try to find user by wallet address
+        const walletAddressRecord = await prisma.walletAddress.findUnique({
+            where: { walletAddress: walletAddress },
             include: {
                 user: {
                     select: {
@@ -132,8 +132,8 @@ export const getUserByWallet = async (req, res) => {
             }
         });
 
-        if (publicKeyRecord && publicKeyRecord.user) {
-            return res.status(200).json(publicKeyRecord.user);
+        if (walletAddressRecord && walletAddressRecord.user) {
+            return res.status(200).json(walletAddressRecord.user);
         }
 
         // If not found by wallet, return 404 (user hasn't logged in yet)
@@ -154,9 +154,9 @@ export const getAllUsersFromDB = async (req, res) => {
                 id: true,
                 name: true,
                 createdAt: true,
-                publicKeys: {
+                walletAddresses: {
                     select: {
-                        publicKey: true
+                        walletAddress: true
                     }
                 }
             }
@@ -167,7 +167,7 @@ export const getAllUsersFromDB = async (req, res) => {
             id: user.id,
             name: user.name,
             createdAt: user.createdAt,
-            walletAddresses: user.publicKeys.map(pk => pk.publicKey)
+            walletAddresses: user.walletAddresses.map(wa => wa.walletAddress)
         }));
 
         res.status(200).json(usersWithWallets);

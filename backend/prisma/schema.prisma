@@ -24,15 +24,15 @@ model User {
   ConsentRequestPatient     ConsentRequest[]   @relation("ConsentRequestPatient")
   ConsentRequestRequestedBy ConsentRequest[]   @relation("ConsentRequestRequestedBy")
   PatientRecord             PatientRecord[]
-  publicKeys                PublicKey[]
+  walletAddresses           WalletAddress[]
 
 }
 
-model PublicKey {
-  id        String @id @default(uuid())
-  userId    String
-  publicKey String @unique
-  user      User   @relation(fields: [userId], references: [id])
+model WalletAddress {
+  id            String @id @default(uuid())
+  userId        String
+  walletAddress String @unique
+  user          User   @relation(fields: [userId], references: [id])
 
   @@index([userId])
 }
