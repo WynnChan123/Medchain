@@ -290,7 +290,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
                 <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4">
                   <p className="text-blue-300 text-sm">
                     <FileText size={16} className="inline mr-2" />
-                    This user is a patient. No role upgrade request history available.
+                    This user is a patient.
                   </p>
                 </div>
               )}

@@ -20,15 +20,29 @@ export const signUp = async (req, res) => {
       return res.status(400).json({ message: 'Wallet address (publicKey) is required' });
     }
 
-    // Create user with linked wallet address
+    // Check if wallet address already exists
+    const existingWallet = await prisma.walletAddress.findUnique({
+      where: { walletAddress: publicKey },
+    });
+
+    if (existingWallet) {
+      return res.status(400).json({ 
+        message: 'This wallet address is already registered' 
+      });
+    }
+
+    // Create user first, then add wallet address
     const newUser = await prisma.user.create({
       data: { 
         name,
-        walletAddresses: {
-          create: {
-            walletAddress: publicKey,
-          },
-        },
+      },
+    });
+
+    // Now create the wallet address linked to the user
+    await prisma.walletAddress.create({
+      data: {
+        walletAddress: publicKey,
+        userId: newUser.id,
       },
     });
 
