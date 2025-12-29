@@ -105,7 +105,7 @@ export default function CreateUser() {
         return false;
       }
 
-      const response = await fetch('${API_URL}/api/auth/signUp', {
+      const response = await fetch(`${API_URL}/api/auth/signUp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
