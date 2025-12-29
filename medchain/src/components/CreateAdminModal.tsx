@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import React, { useState } from 'react';
 import { createAdmin } from '../lib/integration';
 import { print } from '../../utils/toast';
+import { API_URL } from '@/lib/config';
 
 interface createAdminModalProps {
   isOpen: boolean;
@@ -26,7 +27,7 @@ const CreateAdminModal = ({ isOpen, onClose }: createAdminModalProps) => {
       await createAdmin(walletAddress);
 
       // Persist the admin name in the backend
-      const response = await fetch('${API_URL}/api/auth/signUp', {
+      const response = await fetch(`${API_URL}/api/auth/signUp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
