@@ -6,6 +6,7 @@ import { print } from '../../utils/toast';
 import { ethers } from 'ethers';
 import CryptoJS from 'crypto-js';
 import { getUserPublicKey } from '@/lib/userKeys';
+import { API_URL } from '@/lib/config';
 
 interface PatientShareListModalProps {
   isOpen: boolean;
@@ -94,7 +95,7 @@ const handleShare = async() => {
     const aesKeyHex = aesKey.toString(CryptoJS.enc.Hex);
     const encrypted = CryptoJS.AES.encrypt(payload, aesKeyHex).toString();
     
-    const uploadResponse = await fetch('${API_URL}/api/upload/uploadToPinata', {
+    const uploadResponse = await fetch(`${API_URL}/api/upload/uploadToPinata`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 

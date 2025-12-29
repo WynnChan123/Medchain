@@ -71,7 +71,7 @@ const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
         // If not found by direct lookup, fetch all users and match
         if (!userFound) {
           try {
-            const allUsersResponse = await fetch('${API_URL}/api/user/all', {
+            const allUsersResponse = await fetch(`${API_URL}/api/user/all`, {
               headers: {
                 'Authorization': `Bearer ${token}`
               }
