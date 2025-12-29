@@ -19,6 +19,7 @@ import {
 import { ethers } from 'ethers';
 import { UserRole } from '../../../utils/userRole';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { API_URL } from '@/lib/config';
 
 export default function CreateUser() {
   const [username, setUsername] = useState('');
