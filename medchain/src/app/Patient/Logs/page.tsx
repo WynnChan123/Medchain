@@ -143,20 +143,43 @@ export default function PatientAccessLogs() {
       contract.off('GrantAccess', onGrant);
       contract.off('RevokeAccess', onRevoke);
     };
-  }, [walletAddress, provider, abi]);
+  }, [walletAddress, provider, abi, ACCESS_CONTROL_ADDRESS]);
 
   return (
       <div className="bg-gray-900 rounded-lg p-6 border border-gray-700">
       <h2 className="text-white text-lg font-semibold mb-4">Your medical record access log</h2>
+        
+        {/* Configuration Error */}
+        {!ACCESS_CONTROL_ADDRESS ? (
+          <div className="mb-4 rounded-xl border border-yellow-500 bg-yellow-500/20 px-4 py-3 text-yellow-300">
+            <strong className="font-semibold">Configuration Error:</strong> Access Control contract address is not configured.
+          </div>
+        ) : null}
+
+        {/* ABI Fetch Error */}
         {error && (
           <div className="mb-4 rounded-xl border border-red-500 bg-red-500/20 px-4 py-3 text-red-300">
             <strong className="font-semibold">Error:</strong> {error}
+            <div className="mt-2">
+              <button 
+                onClick={() => window.location.reload()} 
+                className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm"
+              >
+                Retry
+              </button>
+            </div>
           </div>
         )}      
-        {loading || !abi ? (
+
+        {/* Loading State */}
+        {loading ? (
         <div className="flex items-center justify-center py-10">
           <Loader2 className="animate-spin text-blue-500 mb-4" size={48} />
           <span className="text-lg opacity-80 text-white">Loading logs…</span>        
+        </div>
+      ) : !abi ? ( // If not loading, but ABI is null (meaning ABI fetch failed)
+        <div className="text-center py-10 text-gray-400">
+          <p>Unable to load access logs. Please check the error message above.</p>
         </div>
       ) : (
         <div>
@@ -172,23 +195,23 @@ export default function PatientAccessLogs() {
           <tbody>
             {events.length === 0 ? (
               <tr>
-                <td colSpan={4} className="text-center text-gray-400">
+                <td colSpan={4} className="text-center text-gray-400 py-6">
                   No access events found.
                 </td>
               </tr>
             ) : (
               events.map((event, i) => (
                 <tr key={event.txHash + i} className={event.type === 'Revoked' ? 'text-red-400' : 'text-green-400'}>
-                  <td>{event.type}</td>
-                  <td>
+                  <td className="py-3 px-4">{event.type}</td>
+                  <td className="py-3 px-4">
                     <span className="font-mono">
                       {event.thirdParty.slice(0, 6)}...{event.thirdParty.slice(-4)}
                     </span>
                   </td>
-                  <td>
+                  <td className="py-3 px-4">
                     {new Date(event.timestamp * 1000).toLocaleString()}
                   </td>
-                  <td>
+                  <td className="py-3 px-4">
                     <a
                       href={`https://sepolia.etherscan.io/tx/${event.txHash}`}
                       target="_blank"
