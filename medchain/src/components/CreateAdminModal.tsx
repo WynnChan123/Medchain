@@ -1,8 +1,9 @@
 import { X } from 'lucide-react';
 import React, { useState, useMemo } from 'react';
-import { createAdmin } from '../lib/integration';
+import { createAdmin, getRole } from '../lib/integration';
 import { print } from '../../utils/toast';
 import { API_URL } from '@/lib/config';
+import { UserRole } from '../../utils/userRole';
 
 interface createAdminModalProps {
   isOpen: boolean;
@@ -14,6 +15,8 @@ const CreateAdminModal = ({ isOpen, onClose }: createAdminModalProps) => {
   const [walletAddress, setWalletAddress] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [filled, setFilled] = useState({ name: false, walletAddress: false });
+  const [isCheckingAddress, setIsCheckingAddress] = useState(false);
+  const [isAlreadyAdmin, setIsAlreadyAdmin] = useState(false);
 
   if (!isOpen) return null;
 
@@ -23,6 +26,33 @@ const CreateAdminModal = ({ isOpen, onClose }: createAdminModalProps) => {
     // Check if it starts with 0x and has 42 characters total (0x + 40 hex chars)
     const ethAddressRegex = /^0x[a-fA-F0-9]{40}$/;
     return ethAddressRegex.test(address);
+  };
+
+  // Check if address is already an admin
+  const checkIfAlreadyAdmin = async (address: string) => {
+    if (!isValidAddress(address)) {
+      setIsAlreadyAdmin(false);
+      return;
+    }
+
+    try {
+      setIsCheckingAddress(true);
+      const role = await getRole(address);
+      setIsAlreadyAdmin(role === UserRole.Admin);
+    } catch (error) {
+      console.error('Error checking admin status:', error);
+      setIsAlreadyAdmin(false);
+    } finally {
+      setIsCheckingAddress(false);
+    }
+  };
+
+  // Handle wallet address blur
+  const handleWalletAddressBlur = async () => {
+    setFilled(prev => ({ ...prev, walletAddress: true }));
+    if (walletAddress.trim() && isValidAddress(walletAddress)) {
+      await checkIfAlreadyAdmin(walletAddress);
+    }
   };
 
   // Validation errors
@@ -37,17 +67,21 @@ const CreateAdminModal = ({ isOpen, onClose }: createAdminModalProps) => {
       errors.push('Wallet address is required');
     } else if (filled.walletAddress && walletAddress.trim() && !isValidAddress(walletAddress)) {
       errors.push('Invalid wallet address format');
+    } else if (filled.walletAddress && isAlreadyAdmin) {
+      errors.push('This wallet address is already an admin');
     }
     
     return errors;
-  }, [name, walletAddress, filled]);
+  }, [name, walletAddress, filled, isAlreadyAdmin]);
 
   // Check if form is valid
   const isFormValid = useMemo(() => {
     return name.trim() !== '' && 
            walletAddress.trim() !== '' && 
-           isValidAddress(walletAddress);
-  }, [name, walletAddress]);
+           isValidAddress(walletAddress) &&
+           !isAlreadyAdmin &&
+           !isCheckingAddress;
+  }, [name, walletAddress, isAlreadyAdmin, isCheckingAddress]);
 
   const handleCreate = async () => {
     // Mark all fields as filled
@@ -61,6 +95,21 @@ const CreateAdminModal = ({ isOpen, onClose }: createAdminModalProps) => {
     if (!isValidAddress(walletAddress)) {
       print('Invalid wallet address format', 'error', () => {});
       return;
+    }
+
+    // Check if already admin before proceeding
+    try {
+      setIsCheckingAddress(true);
+      const role = await getRole(walletAddress);
+      if (role === UserRole.Admin) {
+        setIsAlreadyAdmin(true);
+        print('This wallet address is already an admin', 'error', () => {});
+        return;
+      }
+    } catch (error) {
+      console.error('Error checking admin status:', error);
+    } finally {
+      setIsCheckingAddress(false);
     }
 
     try {
@@ -90,6 +139,7 @@ const CreateAdminModal = ({ isOpen, onClose }: createAdminModalProps) => {
       setName('');
       setWalletAddress('');
       setFilled({ name: false, walletAddress: false });
+      setIsAlreadyAdmin(false);
       onClose();
     } catch (error: any) {
       console.error('Failed to create admin:', error);
@@ -142,10 +192,10 @@ const CreateAdminModal = ({ isOpen, onClose }: createAdminModalProps) => {
               type="text"
               value={walletAddress}
               onChange={(e) => setWalletAddress(e.target.value)}
-              onBlur={() => setFilled(prev => ({ ...prev, walletAddress: true }))}
+              onBlur={handleWalletAddressBlur}
               placeholder="0x..."
               className={`w-full p-3 bg-gray-800 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 ${
-                filled.walletAddress && (!walletAddress.trim() || !isValidAddress(walletAddress))
+                filled.walletAddress && (!walletAddress.trim() || !isValidAddress(walletAddress) || isAlreadyAdmin)
                   ? 'border-red-500 focus:ring-red-600'
                   : 'border-gray-700 focus:ring-blue-600'
               }`}
@@ -155,6 +205,12 @@ const CreateAdminModal = ({ isOpen, onClose }: createAdminModalProps) => {
             )}
             {filled.walletAddress && walletAddress.trim() && !isValidAddress(walletAddress) && (
               <p className="text-red-400 text-sm mt-2">Invalid wallet address format (must start with 0x and be 42 characters)</p>
+            )}
+            {isCheckingAddress && (
+              <p className="text-blue-400 text-sm mt-2">Checking if address is already an admin...</p>
+            )}
+            {filled.walletAddress && walletAddress.trim() && isValidAddress(walletAddress) && isAlreadyAdmin && !isCheckingAddress && (
+              <p className="text-red-400 text-sm mt-2">This wallet address is already an admin</p>
             )}
           </div>
           
