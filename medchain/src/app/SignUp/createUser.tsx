@@ -505,6 +505,12 @@ export default function CreateUser() {
                             license: e.target.files?.[0] || null,
                           })
                         }
+                        onRemove={() =>
+                          setFiles({
+                            ...files,
+                            license: null,
+                          })
+                        }
                       />
                       <FileUploadField
                         label="Government ID"
@@ -515,6 +521,12 @@ export default function CreateUser() {
                             id: e.target.files?.[0] || null,
                           })
                         }
+                        onRemove={() =>
+                          setFiles({
+                            ...files,
+                            id: null,
+                          })
+                        }
                       />
                       <FileUploadField
                         label="Proof of Practice/Organization"
@@ -523,6 +535,12 @@ export default function CreateUser() {
                           setFiles({
                             ...files,
                             proof: e.target.files?.[0] || null,
+                          })
+                        }
+                        onRemove={() =>
+                          setFiles({
+                            ...files,
+                            proof: null,
                           })
                         }
                       />
