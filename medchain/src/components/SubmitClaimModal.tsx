@@ -108,8 +108,16 @@ const SubmitClaimModal: React.FC<SubmitClaimModalProps> = ({
   const removeFile = (index: number, type: 'photo' | 'document') => {
     if (type === 'photo') {
       setPhotos((prev) => prev.filter((_, i) => i !== index));
+      // Reset the file input to allow re-uploading the same file
+      if (photoInputRef.current) {
+        photoInputRef.current.value = '';
+      }
     } else {
       setDocuments((prev) => prev.filter((_, i) => i !== index));
+      // Reset the file input to allow re-uploading the same file
+      if (docInputRef.current) {
+        docInputRef.current.value = '';
+      }
     }
   };
 
