@@ -342,7 +342,7 @@ This project is licensed under the ISC License.
 
 ## 👥 Contributors
 
-- Your Name/Team
+- Wynn Chan
 
 ## 🔗 Useful Links
 
