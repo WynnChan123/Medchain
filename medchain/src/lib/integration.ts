@@ -754,16 +754,7 @@ export async function submitClaim(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        encryptedData: JSON.stringify(payload), // The API expects encryptedData field, but here we are sending our custom JSON structure. 
-        // WAIT: The backend /uploadToPinata might expect specific fields. 
-        // Let's check the backend code if possible, or just use a generic IPFS upload if available.
-        // Looking at submitRoleUpgradeRequest, it sends { encryptedData, metadata }.
-        // Let's wrap our payload in `encryptedData` to match the backend expectation, 
-        // effectively double-stringifying or just using the field name.
-        // Actually, let's just send the payload as the body if we had a generic endpoint.
-        // Since we are using the existing endpoint, let's adapt.
-        // The existing endpoint likely pins whatever is in `encryptedData`.
-        // Let's put our JSON string there.
+        encryptedData: JSON.stringify(payload), // The API expects encryptedData field, but here we are sending our 
         metadata: {
           type: 'claim',
           recordId
@@ -874,21 +865,8 @@ export async function getClaimFiles(cid: string, insurerAddress: string) {
       const text = await response.text();
       throw new Error(`IPFS fetch failed: ${response.status} ${response.statusText} - ${text}`);
     }
-    // The backend returns the raw content (which is the JSON string of encryptedData)
-    // But wait, uploadToPinata uploads a BLOB of `encryptedData`.
-    // So the content we get back is the string "{\"encryptedAesKey\":...}"
-    // We need to parse it as JSON.
     const data = await response.json();
     
-    // The data is what we put in `encryptedData` in submitClaim.
-    // Wait, the backend endpoint `uploadToPinata` might wrap it?
-    // Let's assume the backend just pins the JSON body we sent or the `encryptedData` field.
-    // If we look at `submitRoleUpgradeRequest`, it sends `encryptedData` and expects `cid`.
-    // Usually these backends pin the JSON.
-    // If the backend pins { encryptedData: "...", metadata: ... }, then we need to parse that.
-    // Let's assume standard behavior: we get back the JSON object we sent.
-    
-    // Our payload was inside `encryptedData` stringified.
     let payload;
     if (data.encryptedData) {
        payload = JSON.parse(data.encryptedData);
